@@ -27,7 +27,7 @@ type RunState = {
 function ChatBenchPage() {
   const navigate = useNavigate()
   const nativeSessionId = useSessionId()
-  const [active, setActive] = useState<EngineId>('hindsight')
+  const [active, setActive] = useState<EngineId>('mem0')
   const [turnId, setTurnId] = useState(0)
   const [mode, setMode] = useState<'explorer' | 'scientist'>('explorer')
   const [run, setRun] = useState<RunState | null>(null)

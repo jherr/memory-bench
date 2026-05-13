@@ -39,10 +39,16 @@ export const Route = createFileRoute('/api/chat')({
               content?: string
               parts?: Array<{ type: string; content?: string }>
             }>
-            sessionId: string
-            engineId: EngineId
+            data?: { sessionId?: string; engineId?: EngineId }
+            sessionId?: string
+            engineId?: EngineId
           }
-          const { messages, sessionId, engineId } = body
+          const messages = body.messages
+          const sessionId = body.data?.sessionId ?? body.sessionId ?? ''
+          const engineId = (body.data?.engineId ?? body.engineId) as EngineId
+          console.log(
+            `[api/chat] hit: engine=${engineId} session=${sessionId?.slice(0, 12)} msgs=${messages?.length}`,
+          )
 
           const lastUser = [...messages]
             .reverse()

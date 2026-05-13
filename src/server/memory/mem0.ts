@@ -91,7 +91,6 @@ export const mem0Engine: MemoryEngine = {
             { role: 'assistant', content: input.assistant },
           ],
           user_id: userIdFor(scope),
-          run_id: scope.sessionId,
         }),
       }),
     )
@@ -114,7 +113,8 @@ export const mem0Engine: MemoryEngine = {
         body: JSON.stringify({
           query,
           user_id: userIdFor(scope),
-          run_id: scope.sessionId,
+          rerank: true,
+          threshold: 0.1,
         }),
       }),
     )
@@ -140,7 +140,7 @@ export const mem0Engine: MemoryEngine = {
 
   async inspect(scope): Promise<MemorySnapshot> {
     const userId = userIdFor(scope)
-    const url = `${MEM0_URL}/memories?user_id=${encodeURIComponent(userId)}&run_id=${encodeURIComponent(scope.sessionId)}`
+    const url = `${MEM0_URL}/memories?user_id=${encodeURIComponent(userId)}`
     const result = await safeJson(() =>
       fetch(url, { method: 'GET', headers: authHeaders() }),
     )
@@ -153,7 +153,7 @@ export const mem0Engine: MemoryEngine = {
 
   async listFacts(scope): Promise<FactList> {
     const userId = userIdFor(scope)
-    const url = `${MEM0_URL}/memories?user_id=${encodeURIComponent(userId)}&run_id=${encodeURIComponent(scope.sessionId)}`
+    const url = `${MEM0_URL}/memories?user_id=${encodeURIComponent(userId)}`
     const result = await safeJson(() =>
       fetch(url, { method: 'GET', headers: authHeaders() }),
     )

@@ -49,32 +49,12 @@ export function ChatPanel({
   const autoplayIdxRef = useRef(0)
   const lastIsLoadingRef = useRef(false)
 
-  const fetchLastRecall = async () => {
-    try {
-      const recallRes = await fetch(
-        `/api/debug/last-recall?sessionId=${encodeURIComponent(sessionId)}`,
-      )
-      if (recallRes.ok) {
-        const { entry } = (await recallRes.json()) as {
-          entry: LastRecall | null
-        }
-        if (entry) setLastRecall(entry)
-      }
-    } catch (err) {
-      console.error('[ChatPanel] recall fetch error:', err)
-    }
-  }
-
   const { messages, sendMessage, isLoading } = useChat({
     connection: fetchServerSentEvents('/api/chat'),
     body: { sessionId, engineId },
-    onResponse: () => {
-      void fetchLastRecall()
-    },
     onFinish: async (assistantMessage) => {
       const assistantText = extractText(assistantMessage.parts)
       pendingUserRef.current = ''
-      void fetchLastRecall()
       if (!assistantText) return
       const deadline = Date.now() + 20_000
       while (Date.now() < deadline) {
@@ -135,6 +115,38 @@ export function ChatPanel({
     }, delay)
     return () => clearTimeout(handle)
   }, [autoplay, isLoading, sendMessage])
+
+  useEffect(() => {
+    if (!isLoading) return
+    let cancelled = false
+    const prevTakenAt = lastRecall?.takenAt ?? ''
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const r = await fetch(
+            `/api/debug/last-recall?sessionId=${encodeURIComponent(sessionId)}`,
+          )
+          if (r.ok) {
+            const { entry } = (await r.json()) as {
+              entry: LastRecall | null
+            }
+            if (entry && entry.takenAt !== prevTakenAt) {
+              if (!cancelled) setLastRecall(entry)
+              return
+            }
+          }
+        } catch {
+          // best-effort, keep polling
+        }
+        await new Promise((r) => setTimeout(r, 250))
+      }
+    }
+    void poll()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, sessionId])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

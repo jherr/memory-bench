@@ -66,26 +66,29 @@ export function MemoryPanel({
       return
     }
     let cancelled = false
-    setLoading(true)
-    setErr(null)
-    fetch(
-      `/api/memory/${engineId}/facts?sessionId=${encodeURIComponent(sessionId)}`,
-    )
-      .then(async (res) => {
+    const load = async (showSpinner: boolean) => {
+      if (showSpinner) setLoading(true)
+      try {
+        const res = await fetch(
+          `/api/memory/${engineId}/facts?sessionId=${encodeURIComponent(sessionId)}`,
+        )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then((json: FactList) => {
-        if (!cancelled) setFacts(json)
-      })
-      .catch((e: Error) => {
-        if (!cancelled) setErr(e.message)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+        const json = (await res.json()) as FactList
+        if (!cancelled) {
+          setFacts(json)
+          setErr(null)
+        }
+      } catch (e) {
+        if (!cancelled) setErr((e as Error).message)
+      } finally {
+        if (!cancelled && showSpinner) setLoading(false)
+      }
+    }
+    void load(true)
+    const handle = setInterval(() => void load(false), 2000)
     return () => {
       cancelled = true
+      clearInterval(handle)
     }
   }, [engineId, sessionId, turnId, isScrubMode, data])
 
