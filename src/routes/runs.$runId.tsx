@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 
-import { InspectorHost } from '#/components/memory/InspectorHost'
+import { MemoryPanel } from '#/components/memory/MemoryPanel'
 import { ENGINE_IDS } from '#/lib/memory/types'
-import type { EngineId } from '#/lib/memory/types'
+import type { EngineId, FactList, MemoryFact } from '#/lib/memory/types'
 
 type RunIndex = {
   id: string
@@ -16,7 +16,7 @@ type RunIndex = {
 type SessionSnap = {
   sessionId: string
   turnCount: number
-  snapshotsAtMaxTurnJson: Record<EngineId, string | null>
+  factsByEngine: Record<EngineId, Array<MemoryFact>>
 }
 
 type RunLoaderData = {
@@ -29,43 +29,58 @@ const fetchRunData = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<RunLoaderData> => {
     const fs = await import('node:fs')
     const path = await import('node:path')
-    const { getSnapshotsAtTurn, getTurns } = await import('#/server/db/repo')
+    const { getTurns } = await import('#/server/db/repo')
+    const { getEngine } = await import('#/server/memory')
     const RUNS_DIR = path.resolve(process.cwd(), 'data', 'runs')
     const indexPath = path.join(RUNS_DIR, `${data.runId}.json`)
     if (!fs.existsSync(indexPath)) {
       throw new Error('run not found')
     }
     const index = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as RunIndex
-    const sessions: Array<SessionSnap> = index.sessionIds.map((sid) => {
-      try {
-        const turns = getTurns(sid)
-        const maxTurn = turns.at(-1)?.id ?? 0
-        const snaps = maxTurn > 0 ? getSnapshotsAtTurn(sid, maxTurn, 'post') : []
-        const byEngine: Record<EngineId, string | null> = {
-          hindsight: null,
-          mem0: null,
-          honcho: null,
+    const engineIds: Array<EngineId> = ['hindsight', 'mem0', 'honcho']
+    const sessions: Array<SessionSnap> = await Promise.all(
+      index.sessionIds.map(async (sid) => {
+        try {
+          const turns = getTurns(sid)
+          const lists = await Promise.all(
+            engineIds.map(async (id) => {
+              try {
+                return await getEngine(id).listFacts({ sessionId: sid })
+              } catch {
+                return {
+                  engine: id,
+                  facts: [] as Array<MemoryFact>,
+                  takenAt: new Date().toISOString(),
+                } satisfies FactList
+              }
+            }),
+          )
+          const byEngine: Record<EngineId, Array<MemoryFact>> = {
+            hindsight: [],
+            mem0: [],
+            honcho: [],
+          }
+          lists.forEach((l, i) => {
+            byEngine[engineIds[i]] = l.facts
+          })
+          return {
+            sessionId: sid,
+            turnCount: turns.length,
+            factsByEngine: byEngine,
+          }
+        } catch {
+          return {
+            sessionId: sid,
+            turnCount: 0,
+            factsByEngine: {
+              hindsight: [],
+              mem0: [],
+              honcho: [],
+            },
+          }
         }
-        for (const s of snaps) {
-          byEngine[s.engine as EngineId] = s.dataJson
-        }
-        return {
-          sessionId: sid,
-          turnCount: turns.length,
-          snapshotsAtMaxTurnJson: byEngine,
-        }
-      } catch {
-        return {
-          sessionId: sid,
-          turnCount: 0,
-          snapshotsAtMaxTurnJson: {
-            hindsight: null,
-            mem0: null,
-            honcho: null,
-          },
-        }
-      }
-    })
+      }),
+    )
     return { index, sessions }
   })
 
@@ -79,15 +94,6 @@ export const Route = createFileRoute('/runs/$runId')({
 function RunsPage() {
   const { index, sessions } = Route.useLoaderData()
   const [engine, setEngine] = useState<EngineId>('hindsight')
-
-  const parseSnap = (raw: string | null): unknown => {
-    if (!raw) return null
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
-  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-900 text-white">
@@ -127,11 +133,15 @@ function RunsPage() {
               run {i + 1} · {s.sessionId.slice(0, 8)}… · {s.turnCount} turns
             </div>
             <div className="flex-1 min-h-0">
-              <InspectorHost
+              <MemoryPanel
                 engineId={engine}
                 sessionId={s.sessionId}
                 turnId={s.turnCount}
-                data={parseSnap(s.snapshotsAtMaxTurnJson[engine])}
+                data={{
+                  engine,
+                  facts: s.factsByEngine[engine],
+                  takenAt: new Date().toISOString(),
+                }}
               />
             </div>
           </div>

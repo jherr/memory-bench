@@ -2,7 +2,9 @@ import { Honcho } from '@honcho-ai/sdk'
 import type { Peer, Session } from '@honcho-ai/sdk'
 
 import type {
+  FactList,
   MemoryEngine,
+  MemoryFact,
   MemorySnapshot,
   RecallResult,
   RetainInput,
@@ -22,6 +24,20 @@ const honcho = new Honcho({
 const sessionCache = new Map<string, Promise<Session>>()
 const userPeerCache = new Map<string, Promise<Peer>>()
 let assistantPeerPromise: Promise<Peer> | null = null
+
+export async function resetHonchoWorkspace(): Promise<void> {
+  try {
+    const sessionsPage = await honcho.sessions({ size: 100 })
+    const all = await sessionsPage.toArray()
+    await Promise.allSettled(all.map((s) => s.delete()))
+  } catch {
+    // best-effort
+  }
+  await honcho.deleteWorkspace(HONCHO_APP)
+  sessionCache.clear()
+  userPeerCache.clear()
+  assistantPeerPromise = null
+}
 
 function getUserPeer(userId: string): Promise<Peer> {
   let p = userPeerCache.get(userId)
@@ -151,5 +167,30 @@ export const honchoEngine: MemoryEngine = {
         summaries: summaries.ok ? summaries.data : { error: summaries.error },
       },
     }
+  },
+
+  async listFacts(scope): Promise<FactList> {
+    const userId = scope.userId ?? 'demo-user'
+    const result = await timed(async () => {
+      const userPeer = await getUserPeer(userId)
+      const page = await userPeer.conclusions.list({ size: 100 })
+      return page.items
+    })
+    if (!result.ok) {
+      return { engine: 'honcho', facts: [], takenAt: new Date().toISOString() }
+    }
+    const facts: Array<MemoryFact> = result.data
+      .map((c, i) => {
+        const text = c?.content ?? ''
+        if (!text) return null
+        return {
+          id: c?.id ?? `honcho-${i}`,
+          text,
+          source: 'conclusion',
+          createdAt: c?.createdAt ?? undefined,
+        }
+      })
+      .filter((f): f is MemoryFact => f !== null)
+    return { engine: 'honcho', facts, takenAt: new Date().toISOString() }
   },
 }

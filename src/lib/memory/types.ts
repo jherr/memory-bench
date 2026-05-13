@@ -38,9 +38,23 @@ export interface MemorySnapshot {
   data: unknown
 }
 
+export interface MemoryFact {
+  id: string
+  text: string
+  source?: string
+  createdAt?: string
+}
+
+export interface FactList {
+  engine: EngineId
+  facts: Array<MemoryFact>
+  takenAt: string
+}
+
 export interface MemoryEngine {
   id: EngineId
   retainTurn(scope: Scope, input: RetainInput): Promise<Array<RetainReceipt>>
   recall(scope: Scope, query: string): Promise<RecallResult>
   inspect(scope: Scope): Promise<MemorySnapshot>
+  listFacts(scope: Scope): Promise<FactList>
 }

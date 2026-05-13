@@ -32,13 +32,132 @@ services:
       AUTH_DISABLED: "true"
       JWT_SECRET: dev-secret
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       MEM0_TELEMETRY: "false"
-      DATABASE_URL: postgresql://postgres:postgres@mem0-postgres:5432/postgres
-      APP_DB_NAME: mem0_app
+      POSTGRES_HOST: mem0-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_COLLECTION_NAME: memories
+      HISTORY_DB_PATH: /tmp/history.db
     depends_on:
       mem0-postgres:
         condition: service_healthy
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command:
+      - sh
+      - -c
+      - |
+        pip install --quiet 'psycopg[binary,pool]' && \
+        cat > /app/main.py <<'PY'
+        import logging
+        import os
+        from typing import Any, Dict, List, Optional
+        from fastapi import FastAPI, HTTPException
+        from fastapi.responses import JSONResponse, RedirectResponse
+        from pydantic import BaseModel, Field
+        from mem0 import Memory
+
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+        POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "mem0-postgres")
+        POSTGRES_PORT = int(os.environ.get("POSTGRES_PORT", "5432"))
+        POSTGRES_DB = os.environ.get("POSTGRES_DB", "postgres")
+        POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")
+        POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "postgres")
+        POSTGRES_COLLECTION_NAME = os.environ.get("POSTGRES_COLLECTION_NAME", "memories")
+        OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+        HISTORY_DB_PATH = os.environ.get("HISTORY_DB_PATH", "/tmp/history.db")
+
+        CONFIG = {
+            "version": "v1.1",
+            "vector_store": {"provider": "pgvector", "config": {
+                "host": POSTGRES_HOST, "port": POSTGRES_PORT, "dbname": POSTGRES_DB,
+                "user": POSTGRES_USER, "password": POSTGRES_PASSWORD,
+                "collection_name": POSTGRES_COLLECTION_NAME}},
+            "llm": {"provider": "openai", "config": {"api_key": OPENAI_API_KEY, "temperature": 0.2, "model": "gpt-4o-mini"}},
+            "embedder": {"provider": "openai", "config": {"api_key": OPENAI_API_KEY, "model": "text-embedding-3-small"}},
+            "history_db_path": HISTORY_DB_PATH,
+        }
+
+        MEMORY_INSTANCE = Memory.from_config(CONFIG)
+        app = FastAPI(title="Mem0 REST APIs (lite)", version="1.0.0")
+
+        class Message(BaseModel):
+            role: str
+            content: str
+
+        class MemoryCreate(BaseModel):
+            messages: List[Message]
+            user_id: Optional[str] = None
+            agent_id: Optional[str] = None
+            run_id: Optional[str] = None
+            metadata: Optional[Dict[str, Any]] = None
+
+        class SearchRequest(BaseModel):
+            query: str
+            user_id: Optional[str] = None
+            agent_id: Optional[str] = None
+            run_id: Optional[str] = None
+            limit: int = 10
+
+        @app.get("/", include_in_schema=False)
+        def root():
+            return RedirectResponse(url="/docs")
+
+        @app.post("/memories")
+        def add_memory(body: MemoryCreate):
+            try:
+                msgs = [m.model_dump() for m in body.messages]
+                result = MEMORY_INSTANCE.add(messages=msgs, user_id=body.user_id,
+                    agent_id=body.agent_id, run_id=body.run_id, metadata=body.metadata)
+                return result
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @app.get("/memories")
+        def list_memories(user_id: Optional[str] = None, agent_id: Optional[str] = None, run_id: Optional[str] = None):
+            try:
+                kwargs = {}
+                if user_id: kwargs["user_id"] = user_id
+                if agent_id: kwargs["agent_id"] = agent_id
+                if run_id: kwargs["run_id"] = run_id
+                return MEMORY_INSTANCE.get_all(**kwargs)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @app.post("/search")
+        def search(body: SearchRequest):
+            try:
+                kwargs = {"query": body.query, "limit": body.limit}
+                if body.user_id: kwargs["user_id"] = body.user_id
+                if body.agent_id: kwargs["agent_id"] = body.agent_id
+                if body.run_id: kwargs["run_id"] = body.run_id
+                return MEMORY_INSTANCE.search(**kwargs)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @app.delete("/memories/{memory_id}")
+        def delete_memory(memory_id: str):
+            try:
+                MEMORY_INSTANCE.delete(memory_id=memory_id)
+                return {"ok": True}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @app.delete("/memories")
+        def delete_all(user_id: Optional[str] = None, agent_id: Optional[str] = None, run_id: Optional[str] = None):
+            try:
+                kwargs = {}
+                if user_id: kwargs["user_id"] = user_id
+                if agent_id: kwargs["agent_id"] = agent_id
+                if run_id: kwargs["run_id"] = run_id
+                MEMORY_INSTANCE.delete_all(**kwargs)
+                return {"ok": True}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+        PY
+        uvicorn main:app --host 0.0.0.0 --port 8000
 
   mem0-postgres:
     image: ankane/pgvector:v0.5.1
@@ -66,6 +185,9 @@ services:
       CACHE_URL: redis://honcho-redis:6379/0?suppress=true
       CACHE_ENABLED: "true"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LLM_OPENAI_API_KEY: ${OPENAI_API_KEY}
       HONCHO_LLM_PROVIDER: anthropic
       HONCHO_LLM_MODEL: ${MODEL_EXTRACTION:-claude-haiku-4-5}
       AUTH_USE_AUTH: "false"
@@ -91,8 +213,15 @@ services:
       CACHE_URL: redis://honcho-redis:6379/0?suppress=true
       CACHE_ENABLED: "true"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LLM_OPENAI_API_KEY: ${OPENAI_API_KEY}
       HONCHO_LLM_PROVIDER: anthropic
       HONCHO_LLM_MODEL: ${MODEL_EXTRACTION:-claude-haiku-4-5}
+      DERIVER_FLUSH_ENABLED: "true"
+      DERIVER_MODEL_CONFIG__TRANSPORT: anthropic
+      DERIVER_MODEL_CONFIG__MODEL: ${MODEL_EXTRACTION:-claude-haiku-4-5}
+      DERIVER_MODEL_CONFIG__API_KEY_ENV: ANTHROPIC_API_KEY
     depends_on:
       honcho-api:
         condition: service_healthy

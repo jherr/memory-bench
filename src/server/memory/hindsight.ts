@@ -1,7 +1,9 @@
 import { HindsightClient } from '@vectorize-io/hindsight-client'
 
 import type {
+  FactList,
   MemoryEngine,
+  MemoryFact,
   MemorySnapshot,
   RecallResult,
   RetainInput,
@@ -12,6 +14,13 @@ import type {
 const HINDSIGHT_URL = process.env.HINDSIGHT_URL ?? 'http://localhost:8888'
 
 const client = new HindsightClient({ baseUrl: HINDSIGHT_URL })
+
+export async function resetHindsightBank(
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  await client.deleteBank(`${userId}__${sessionId}`)
+}
 
 function bankIdFor(scope: Scope): string {
   const userId = scope.userId ?? 'demo-user'
@@ -110,6 +119,37 @@ export const hindsightEngine: MemoryEngine = {
         memories: memories.ok ? memories.data : { error: memories.error },
         profile: profile.ok ? profile.data : { error: profile.error },
       },
+    }
+  },
+
+  async listFacts(scope): Promise<FactList> {
+    const bankId = bankIdFor(scope)
+    const res = await safeCall(() =>
+      client.listMemories(bankId, { limit: 200 }),
+    )
+    if (!res.ok) {
+      return { engine: 'hindsight', facts: [], takenAt: new Date().toISOString() }
+    }
+    const items = (res.data.items ?? []) as Array<Record<string, unknown>>
+    const facts: Array<MemoryFact> = items
+      .map((m, i) => {
+        const text =
+          (m.text as string | undefined) ??
+          (m.content as string | undefined) ??
+          ''
+        if (!text) return null
+        return {
+          id: (m.id as string | undefined) ?? `hindsight-${i}`,
+          text,
+          source: (m.type as string | undefined) ?? 'memory',
+          createdAt: (m.created_at as string | undefined) ?? undefined,
+        }
+      })
+      .filter((f): f is MemoryFact => f !== null)
+    return {
+      engine: 'hindsight',
+      facts,
+      takenAt: new Date().toISOString(),
     }
   },
 }

@@ -4,10 +4,10 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import { ConsolidationToggle } from '#/components/memory/ConsolidationToggle'
-import { InspectorHost } from '#/components/memory/InspectorHost'
+import { MemoryPanel } from '#/components/memory/MemoryPanel'
 import { TurnTimeline } from '#/components/memory/TurnTimeline'
 import { ENGINE_IDS } from '#/lib/memory/types'
-import type { EngineId } from '#/lib/memory/types'
+import type { EngineId, FactList, MemoryFact } from '#/lib/memory/types'
 
 const phaseSearch = z.object({
   phase: z.enum(['pre', 'post']).default('post'),
@@ -21,7 +21,7 @@ type ScrubLoaderData = {
     assistantContent: string
     activeEngine: EngineId
   }>
-  snapshotsByEngineJson: Record<EngineId, string | null>
+  factsByEngine: Record<EngineId, Array<MemoryFact>>
   meta: {
     modelChat: string | null
     modelExtraction: string | null
@@ -33,21 +33,33 @@ const fetchScrubData = createServerFn({ method: 'GET' })
     (data: { sessionId: string; turnN: number; phase: 'pre' | 'post' }) => data,
   )
   .handler(async ({ data }): Promise<ScrubLoaderData> => {
-    const { getSessionMeta, getSnapshotsAtTurn, getTurns } = await import(
-      '#/server/db/repo'
-    )
+    const { getSessionMeta, getTurns } = await import('#/server/db/repo')
+    const { getEngine } = await import('#/server/memory')
     const allTurns = getTurns(data.sessionId)
     const upTo = allTurns.filter((t) => t.id <= data.turnN)
-    const snaps = getSnapshotsAtTurn(data.sessionId, data.turnN, data.phase)
     const meta = getSessionMeta(data.sessionId)
-    const byEngine: Record<EngineId, string | null> = {
-      hindsight: null,
-      mem0: null,
-      honcho: null,
+    const engineIds: Array<EngineId> = ['hindsight', 'mem0', 'honcho']
+    const lists = await Promise.all(
+      engineIds.map(async (id) => {
+        try {
+          return await getEngine(id).listFacts({ sessionId: data.sessionId })
+        } catch {
+          return {
+            engine: id,
+            facts: [] as Array<MemoryFact>,
+            takenAt: new Date().toISOString(),
+          } satisfies FactList
+        }
+      }),
+    )
+    const factsByEngine: Record<EngineId, Array<MemoryFact>> = {
+      hindsight: [],
+      mem0: [],
+      honcho: [],
     }
-    for (const s of snaps) {
-      byEngine[s.engine as EngineId] = s.dataJson
-    }
+    lists.forEach((list, i) => {
+      factsByEngine[engineIds[i]] = list.facts
+    })
     return {
       turns: upTo.map((t) => ({
         id: t.id,
@@ -56,7 +68,7 @@ const fetchScrubData = createServerFn({ method: 'GET' })
         assistantContent: t.assistantContent,
         activeEngine: t.activeEngine as EngineId,
       })),
-      snapshotsByEngineJson: byEngine,
+      factsByEngine,
       meta: {
         modelChat: meta?.modelChat ?? null,
         modelExtraction: meta?.modelExtraction ?? null,
@@ -86,22 +98,6 @@ function ScrubPage() {
   const data = Route.useLoaderData()
   const [showTranscript, setShowTranscript] = useState(true)
   const turnIdNum = Number(turnN)
-
-  const snapshotsByEngine: Record<EngineId, unknown> = {
-    hindsight: null,
-    mem0: null,
-    honcho: null,
-  }
-  for (const id of ENGINE_IDS) {
-    const raw = data.snapshotsByEngineJson[id]
-    if (raw) {
-      try {
-        snapshotsByEngine[id] = JSON.parse(raw)
-      } catch {
-        snapshotsByEngine[id] = null
-      }
-    }
-  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-900 text-white">
@@ -164,11 +160,15 @@ function ScrubPage() {
         <div className="flex-1 grid grid-cols-3 min-h-0">
           {ENGINE_IDS.map((id) => (
             <div key={id} className="border-r border-orange-500/10 min-h-0">
-              <InspectorHost
+              <MemoryPanel
                 engineId={id}
                 sessionId={sessionId}
                 turnId={turnIdNum}
-                data={snapshotsByEngine[id] ?? null}
+                data={{
+                  engine: id,
+                  facts: data.factsByEngine[id],
+                  takenAt: new Date().toISOString(),
+                }}
               />
             </div>
           ))}

@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { chat, toServerSentEventsResponse } from '@tanstack/ai'
 import { anthropicText } from '@tanstack/ai-anthropic'
 
-import { runRecallForTurn } from '#/server/memory/orchestrator'
+import { runRecallForTurn, runTurn } from '#/server/memory/orchestrator'
 import type { EngineId } from '#/lib/memory/types'
 
 const MODEL_CHAT = (process.env.MODEL_CHAT ??
@@ -57,14 +57,26 @@ export const Route = createFileRoute('/api/chat')({
               : '')
 
           let fragments: Array<{ text: string; source: string }> = []
+          let recallLatencyMs = 0
           if (sessionId && engineId && userText) {
             const recall = await runRecallForTurn(sessionId, engineId, userText)
             fragments = recall.fragments
-            ;(globalThis as any).__lastRecall = {
+            recallLatencyMs = recall.latencyMs
+          }
+
+          const systemPrompt = buildSystemPrompt(fragments)
+
+          const g = globalThis as any
+          g.__lastRecallBySession = g.__lastRecallBySession ?? {}
+          if (sessionId) {
+            g.__lastRecallBySession[sessionId] = {
               sessionId,
               engineId,
               query: userText,
-              result: recall,
+              fragments,
+              latencyMs: recallLatencyMs,
+              systemPrompt,
+              takenAt: new Date().toISOString(),
             }
           }
 
@@ -72,9 +84,49 @@ export const Route = createFileRoute('/api/chat')({
 
           const stream = chat({
             adapter,
-            systemPrompts: [buildSystemPrompt(fragments)],
+            systemPrompts: [systemPrompt],
             messages: messages as any,
             abortController,
+            middleware: [
+              {
+                name: 'memory-retain',
+                onFinish: (ctx, info) => {
+                  if (!sessionId || !userText) return
+                  const assistantReply = info.content ?? ''
+                  if (!assistantReply) return
+                  const work = (async () => {
+                    try {
+                      const turn = await runTurn({
+                        sessionId,
+                        userMsg: userText,
+                        assistantReply,
+                        activeEngineId: engineId,
+                        recall: {
+                          engineId,
+                          result: {
+                            engine: engineId,
+                            latencyMs: recallLatencyMs,
+                            fragments,
+                            raw: null,
+                          },
+                          query: userText,
+                        },
+                      })
+                      const g2 = globalThis as any
+                      g2.__lastTurnBySession = g2.__lastTurnBySession ?? {}
+                      g2.__lastTurnBySession[sessionId] = {
+                        turnId: turn.turnId,
+                        receipts: turn.receipts,
+                        takenAt: new Date().toISOString(),
+                      }
+                    } catch (err) {
+                      console.error('[api/chat] server-side retain failed:', err)
+                    }
+                  })()
+                  ctx.defer(work)
+                },
+              },
+            ],
           })
 
           return toServerSentEventsResponse(stream, { abortController })

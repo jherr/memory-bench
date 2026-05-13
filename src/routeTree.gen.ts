@@ -20,11 +20,14 @@ import { Route as DemoAiChatRouteImport } from './routes/demo/ai-chat'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as DemoGuitarsIndexRouteImport } from './routes/demo/guitars/index'
 import { Route as DemoGuitarsGuitarIdRouteImport } from './routes/demo/guitars/$guitarId'
+import { Route as ApiSessionsResetRouteImport } from './routes/api.sessions.reset'
 import { Route as ApiSessionsImportRouteImport } from './routes/api.sessions.import'
 import { Route as ApiRunsStartRouteImport } from './routes/api.runs.start'
 import { Route as ApiRunsRunIdRouteImport } from './routes/api.runs.$runId'
 import { Route as ApiMemoryTurnRouteImport } from './routes/api.memory.turn'
 import { Route as ApiMemoryRecallRouteImport } from './routes/api.memory.recall'
+import { Route as ApiDebugLastTurnRouteImport } from './routes/api.debug.last-turn'
+import { Route as ApiDebugLastRecallRouteImport } from './routes/api.debug.last-recall'
 import { Route as DemoApiAiTtsRouteImport } from './routes/demo/api.ai.tts'
 import { Route as DemoApiAiTranscriptionRouteImport } from './routes/demo/api.ai.transcription'
 import { Route as DemoApiAiStructuredRouteImport } from './routes/demo/api.ai.structured'
@@ -34,6 +37,7 @@ import { Route as ChatSessionIdScrubTurnNRouteImport } from './routes/chat/$sess
 import { Route as ApiSessionsSessionIdTimelineRouteImport } from './routes/api.sessions.$sessionId.timeline'
 import { Route as ApiSessionsSessionIdExportRouteImport } from './routes/api.sessions.$sessionId.export'
 import { Route as ApiMemoryEngineInspectRouteImport } from './routes/api.memory.$engine.inspect'
+import { Route as ApiMemoryEngineFactsRouteImport } from './routes/api.memory.$engine.facts'
 
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
@@ -90,6 +94,11 @@ const DemoGuitarsGuitarIdRoute = DemoGuitarsGuitarIdRouteImport.update({
   path: '/demo/guitars/$guitarId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSessionsResetRoute = ApiSessionsResetRouteImport.update({
+  id: '/api/sessions/reset',
+  path: '/api/sessions/reset',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSessionsImportRoute = ApiSessionsImportRouteImport.update({
   id: '/api/sessions/import',
   path: '/api/sessions/import',
@@ -113,6 +122,16 @@ const ApiMemoryTurnRoute = ApiMemoryTurnRouteImport.update({
 const ApiMemoryRecallRoute = ApiMemoryRecallRouteImport.update({
   id: '/api/memory/recall',
   path: '/api/memory/recall',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDebugLastTurnRoute = ApiDebugLastTurnRouteImport.update({
+  id: '/api/debug/last-turn',
+  path: '/api/debug/last-turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDebugLastRecallRoute = ApiDebugLastRecallRouteImport.update({
+  id: '/api/debug/last-recall',
+  path: '/api/debug/last-recall',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoApiAiTtsRoute = DemoApiAiTtsRouteImport.update({
@@ -162,6 +181,11 @@ const ApiMemoryEngineInspectRoute = ApiMemoryEngineInspectRouteImport.update({
   path: '/api/memory/$engine/inspect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMemoryEngineFactsRoute = ApiMemoryEngineFactsRouteImport.update({
+  id: '/api/memory/$engine/facts',
+  path: '/api/memory/$engine/facts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -173,13 +197,17 @@ export interface FileRoutesByFullPath {
   '/demo/store': typeof DemoStoreRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/chat/': typeof ChatIndexRoute
+  '/api/debug/last-recall': typeof ApiDebugLastRecallRoute
+  '/api/debug/last-turn': typeof ApiDebugLastTurnRoute
   '/api/memory/recall': typeof ApiMemoryRecallRoute
   '/api/memory/turn': typeof ApiMemoryTurnRoute
   '/api/runs/$runId': typeof ApiRunsRunIdRoute
   '/api/runs/start': typeof ApiRunsStartRoute
   '/api/sessions/import': typeof ApiSessionsImportRoute
+  '/api/sessions/reset': typeof ApiSessionsResetRoute
   '/demo/guitars/$guitarId': typeof DemoGuitarsGuitarIdRoute
   '/demo/guitars/': typeof DemoGuitarsIndexRoute
+  '/api/memory/$engine/facts': typeof ApiMemoryEngineFactsRoute
   '/api/memory/$engine/inspect': typeof ApiMemoryEngineInspectRoute
   '/api/sessions/$sessionId/export': typeof ApiSessionsSessionIdExportRoute
   '/api/sessions/$sessionId/timeline': typeof ApiSessionsSessionIdTimelineRoute
@@ -200,13 +228,17 @@ export interface FileRoutesByTo {
   '/demo/store': typeof DemoStoreRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/chat': typeof ChatIndexRoute
+  '/api/debug/last-recall': typeof ApiDebugLastRecallRoute
+  '/api/debug/last-turn': typeof ApiDebugLastTurnRoute
   '/api/memory/recall': typeof ApiMemoryRecallRoute
   '/api/memory/turn': typeof ApiMemoryTurnRoute
   '/api/runs/$runId': typeof ApiRunsRunIdRoute
   '/api/runs/start': typeof ApiRunsStartRoute
   '/api/sessions/import': typeof ApiSessionsImportRoute
+  '/api/sessions/reset': typeof ApiSessionsResetRoute
   '/demo/guitars/$guitarId': typeof DemoGuitarsGuitarIdRoute
   '/demo/guitars': typeof DemoGuitarsIndexRoute
+  '/api/memory/$engine/facts': typeof ApiMemoryEngineFactsRoute
   '/api/memory/$engine/inspect': typeof ApiMemoryEngineInspectRoute
   '/api/sessions/$sessionId/export': typeof ApiSessionsSessionIdExportRoute
   '/api/sessions/$sessionId/timeline': typeof ApiSessionsSessionIdTimelineRoute
@@ -228,13 +260,17 @@ export interface FileRoutesById {
   '/demo/store': typeof DemoStoreRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/chat/': typeof ChatIndexRoute
+  '/api/debug/last-recall': typeof ApiDebugLastRecallRoute
+  '/api/debug/last-turn': typeof ApiDebugLastTurnRoute
   '/api/memory/recall': typeof ApiMemoryRecallRoute
   '/api/memory/turn': typeof ApiMemoryTurnRoute
   '/api/runs/$runId': typeof ApiRunsRunIdRoute
   '/api/runs/start': typeof ApiRunsStartRoute
   '/api/sessions/import': typeof ApiSessionsImportRoute
+  '/api/sessions/reset': typeof ApiSessionsResetRoute
   '/demo/guitars/$guitarId': typeof DemoGuitarsGuitarIdRoute
   '/demo/guitars/': typeof DemoGuitarsIndexRoute
+  '/api/memory/$engine/facts': typeof ApiMemoryEngineFactsRoute
   '/api/memory/$engine/inspect': typeof ApiMemoryEngineInspectRoute
   '/api/sessions/$sessionId/export': typeof ApiSessionsSessionIdExportRoute
   '/api/sessions/$sessionId/timeline': typeof ApiSessionsSessionIdTimelineRoute
@@ -257,13 +293,17 @@ export interface FileRouteTypes {
     | '/demo/store'
     | '/runs/$runId'
     | '/chat/'
+    | '/api/debug/last-recall'
+    | '/api/debug/last-turn'
     | '/api/memory/recall'
     | '/api/memory/turn'
     | '/api/runs/$runId'
     | '/api/runs/start'
     | '/api/sessions/import'
+    | '/api/sessions/reset'
     | '/demo/guitars/$guitarId'
     | '/demo/guitars/'
+    | '/api/memory/$engine/facts'
     | '/api/memory/$engine/inspect'
     | '/api/sessions/$sessionId/export'
     | '/api/sessions/$sessionId/timeline'
@@ -284,13 +324,17 @@ export interface FileRouteTypes {
     | '/demo/store'
     | '/runs/$runId'
     | '/chat'
+    | '/api/debug/last-recall'
+    | '/api/debug/last-turn'
     | '/api/memory/recall'
     | '/api/memory/turn'
     | '/api/runs/$runId'
     | '/api/runs/start'
     | '/api/sessions/import'
+    | '/api/sessions/reset'
     | '/demo/guitars/$guitarId'
     | '/demo/guitars'
+    | '/api/memory/$engine/facts'
     | '/api/memory/$engine/inspect'
     | '/api/sessions/$sessionId/export'
     | '/api/sessions/$sessionId/timeline'
@@ -311,13 +355,17 @@ export interface FileRouteTypes {
     | '/demo/store'
     | '/runs/$runId'
     | '/chat/'
+    | '/api/debug/last-recall'
+    | '/api/debug/last-turn'
     | '/api/memory/recall'
     | '/api/memory/turn'
     | '/api/runs/$runId'
     | '/api/runs/start'
     | '/api/sessions/import'
+    | '/api/sessions/reset'
     | '/demo/guitars/$guitarId'
     | '/demo/guitars/'
+    | '/api/memory/$engine/facts'
     | '/api/memory/$engine/inspect'
     | '/api/sessions/$sessionId/export'
     | '/api/sessions/$sessionId/timeline'
@@ -339,13 +387,17 @@ export interface RootRouteChildren {
   DemoStoreRoute: typeof DemoStoreRoute
   RunsRunIdRoute: typeof RunsRunIdRoute
   ChatIndexRoute: typeof ChatIndexRoute
+  ApiDebugLastRecallRoute: typeof ApiDebugLastRecallRoute
+  ApiDebugLastTurnRoute: typeof ApiDebugLastTurnRoute
   ApiMemoryRecallRoute: typeof ApiMemoryRecallRoute
   ApiMemoryTurnRoute: typeof ApiMemoryTurnRoute
   ApiRunsRunIdRoute: typeof ApiRunsRunIdRoute
   ApiRunsStartRoute: typeof ApiRunsStartRoute
   ApiSessionsImportRoute: typeof ApiSessionsImportRoute
+  ApiSessionsResetRoute: typeof ApiSessionsResetRoute
   DemoGuitarsGuitarIdRoute: typeof DemoGuitarsGuitarIdRoute
   DemoGuitarsIndexRoute: typeof DemoGuitarsIndexRoute
+  ApiMemoryEngineFactsRoute: typeof ApiMemoryEngineFactsRoute
   ApiMemoryEngineInspectRoute: typeof ApiMemoryEngineInspectRoute
   ApiSessionsSessionIdExportRoute: typeof ApiSessionsSessionIdExportRoute
   ApiSessionsSessionIdTimelineRoute: typeof ApiSessionsSessionIdTimelineRoute
@@ -436,6 +488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoGuitarsGuitarIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sessions/reset': {
+      id: '/api/sessions/reset'
+      path: '/api/sessions/reset'
+      fullPath: '/api/sessions/reset'
+      preLoaderRoute: typeof ApiSessionsResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sessions/import': {
       id: '/api/sessions/import'
       path: '/api/sessions/import'
@@ -469,6 +528,20 @@ declare module '@tanstack/react-router' {
       path: '/api/memory/recall'
       fullPath: '/api/memory/recall'
       preLoaderRoute: typeof ApiMemoryRecallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/debug/last-turn': {
+      id: '/api/debug/last-turn'
+      path: '/api/debug/last-turn'
+      fullPath: '/api/debug/last-turn'
+      preLoaderRoute: typeof ApiDebugLastTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/debug/last-recall': {
+      id: '/api/debug/last-recall'
+      path: '/api/debug/last-recall'
+      fullPath: '/api/debug/last-recall'
+      preLoaderRoute: typeof ApiDebugLastRecallRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo/api/ai/tts': {
@@ -534,6 +607,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMemoryEngineInspectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/memory/$engine/facts': {
+      id: '/api/memory/$engine/facts'
+      path: '/api/memory/$engine/facts'
+      fullPath: '/api/memory/$engine/facts'
+      preLoaderRoute: typeof ApiMemoryEngineFactsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -547,13 +627,17 @@ const rootRouteChildren: RootRouteChildren = {
   DemoStoreRoute: DemoStoreRoute,
   RunsRunIdRoute: RunsRunIdRoute,
   ChatIndexRoute: ChatIndexRoute,
+  ApiDebugLastRecallRoute: ApiDebugLastRecallRoute,
+  ApiDebugLastTurnRoute: ApiDebugLastTurnRoute,
   ApiMemoryRecallRoute: ApiMemoryRecallRoute,
   ApiMemoryTurnRoute: ApiMemoryTurnRoute,
   ApiRunsRunIdRoute: ApiRunsRunIdRoute,
   ApiRunsStartRoute: ApiRunsStartRoute,
   ApiSessionsImportRoute: ApiSessionsImportRoute,
+  ApiSessionsResetRoute: ApiSessionsResetRoute,
   DemoGuitarsGuitarIdRoute: DemoGuitarsGuitarIdRoute,
   DemoGuitarsIndexRoute: DemoGuitarsIndexRoute,
+  ApiMemoryEngineFactsRoute: ApiMemoryEngineFactsRoute,
   ApiMemoryEngineInspectRoute: ApiMemoryEngineInspectRoute,
   ApiSessionsSessionIdExportRoute: ApiSessionsSessionIdExportRoute,
   ApiSessionsSessionIdTimelineRoute: ApiSessionsSessionIdTimelineRoute,

@@ -1,5 +1,7 @@
 import type {
+  FactList,
   MemoryEngine,
+  MemoryFact,
   MemorySnapshot,
   RecallResult,
   RetainInput,
@@ -18,6 +20,36 @@ function authHeaders(): Record<string, string> {
 
 function userIdFor(scope: Scope): string {
   return scope.userId ?? 'demo-user'
+}
+
+export async function resetMem0User(userId: string): Promise<void> {
+  const bulkUrl = `${MEM0_URL}/memories?user_id=${encodeURIComponent(userId)}`
+  const bulkRes = await fetch(bulkUrl, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (bulkRes.ok) return
+  const listRes = await fetch(bulkUrl, { method: 'GET', headers: authHeaders() })
+  if (!listRes.ok) {
+    throw new Error(`mem0 bulk delete failed (${bulkRes.status}) and list failed (${listRes.status})`)
+  }
+  const json: any = await listRes.json().catch(() => null)
+  const items: Array<any> = Array.isArray(json?.results)
+    ? json.results
+    : Array.isArray(json)
+      ? json
+      : []
+  await Promise.all(
+    items
+      .map((m) => m?.id as string | undefined)
+      .filter((id): id is string => !!id)
+      .map((id) =>
+        fetch(`${MEM0_URL}/memories/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        }),
+      ),
+  )
 }
 
 async function safeJson(
@@ -117,5 +149,37 @@ export const mem0Engine: MemoryEngine = {
       takenAt: new Date().toISOString(),
       data: result.ok ? result.data : { error: result.error },
     }
+  },
+
+  async listFacts(scope): Promise<FactList> {
+    const userId = userIdFor(scope)
+    const url = `${MEM0_URL}/memories?user_id=${encodeURIComponent(userId)}&run_id=${encodeURIComponent(scope.sessionId)}`
+    const result = await safeJson(() =>
+      fetch(url, { method: 'GET', headers: authHeaders() }),
+    )
+    if (!result.ok) {
+      return { engine: 'mem0', facts: [], takenAt: new Date().toISOString() }
+    }
+    const items: Array<any> = Array.isArray(result.data?.results)
+      ? result.data.results
+      : Array.isArray(result.data)
+        ? result.data
+        : []
+    const facts: Array<MemoryFact> = items
+      .map((m, i) => {
+        const text = (m?.memory as string | undefined) ?? ''
+        if (!text) return null
+        return {
+          id: (m?.id as string | undefined) ?? `mem0-${i}`,
+          text,
+          source: 'memory',
+          createdAt:
+            (m?.updated_at as string | undefined) ??
+            (m?.created_at as string | undefined) ??
+            undefined,
+        }
+      })
+      .filter((f): f is MemoryFact => f !== null)
+    return { engine: 'mem0', facts, takenAt: new Date().toISOString() }
   },
 }

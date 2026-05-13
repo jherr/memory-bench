@@ -3,12 +3,13 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
 import { ChatPanel } from '#/components/memory/ChatPanel'
 import { EngineSelector } from '#/components/memory/EngineSelector'
-import { InspectorHost } from '#/components/memory/InspectorHost'
+import { MemoryPanel } from '#/components/memory/MemoryPanel'
 import { ModeToggle } from '#/components/memory/ModeToggle'
 import { ScriptRunner } from '#/components/memory/ScriptRunner'
 import type { RunPlan } from '#/components/memory/ScriptRunner'
 import { TurnTimeline } from '#/components/memory/TurnTimeline'
-import { useSessionId } from '#/lib/memory/useSessionId'
+import { resetSessionId, useSessionId } from '#/lib/memory/useSessionId'
+import { listScripts } from '#/lib/scripts/loader'
 import type { EngineId } from '#/lib/memory/types'
 import { ENGINE_IDS } from '#/lib/memory/types'
 
@@ -30,6 +31,18 @@ function ChatBenchPage() {
   const [turnId, setTurnId] = useState(0)
   const [mode, setMode] = useState<'explorer' | 'scientist'>('explorer')
   const [run, setRun] = useState<RunState | null>(null)
+  const [resetting, setResetting] = useState(false)
+
+  const seedPrompts = useMemo(
+    () =>
+      listScripts().flatMap((s) =>
+        s.turns.map((t, i) => ({
+          label: `${s.id.split('-')[0]} ${i + 1}`,
+          text: t.user,
+        })),
+      ),
+    [],
+  )
 
   const activeSessionId =
     run && run.plan.kind === 'triple'
@@ -77,6 +90,31 @@ function ChatBenchPage() {
     if (plan.kind === 'triple') setTurnId(0)
   }
 
+  const handleResetAll = async () => {
+    if (
+      !window.confirm(
+        'Reset all memories? This deletes every fact in Hindsight, mem0, and Honcho and rotates your session.',
+      )
+    ) {
+      return
+    }
+    setResetting(true)
+    try {
+      const res = await fetch('/api/sessions/reset', { method: 'POST' })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        window.alert(`Reset failed: ${res.status} ${text}`)
+        return
+      }
+      resetSessionId()
+      window.location.reload()
+    } catch (err) {
+      window.alert(`Reset error: ${(err as Error).message}`)
+    } finally {
+      setResetting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-900 text-white">
       <div className="flex items-center justify-between px-4 py-2 border-b border-orange-500/20">
@@ -84,18 +122,32 @@ function ChatBenchPage() {
           <h1 className="text-lg font-bold bg-linear-to-r from-orange-500 to-red-600 text-transparent bg-clip-text">
             memory-bench
           </h1>
-          <EngineSelector
-            active={effectiveEngine}
-            onChange={setActive}
-            enabled={ENABLED}
-            locked={engineLocked || !!run}
-          />
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+              recall:
+            </span>
+            <EngineSelector
+              active={effectiveEngine}
+              onChange={setActive}
+              enabled={ENABLED}
+              locked={engineLocked || !!run}
+            />
+          </div>
           <ModeToggle mode={mode} onChange={setMode} hasTurns={turnId > 0} />
           <ScriptRunner
             isRunning={!!run}
             onStart={handleStart}
             onCancel={() => setRun(null)}
           />
+          <button
+            type="button"
+            onClick={handleResetAll}
+            disabled={resetting || !!run}
+            className="px-3 py-1 rounded text-xs font-medium border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Wipe all memory across Hindsight, mem0, Honcho, and local data dirs"
+          >
+            {resetting ? 'resetting…' : 'Reset all'}
+          </button>
         </div>
         <div className="text-xs text-gray-500 font-mono">
           session: {activeSessionId.slice(0, 8)}…
@@ -113,29 +165,30 @@ function ChatBenchPage() {
           refreshKey={turnId}
         />
       </div>
-      <div className="flex-1 grid grid-cols-[1fr_420px] min-h-0">
-        <div className="border-r border-orange-500/20 min-h-0">
+      <div className="flex-1 grid grid-cols-[2fr_1fr_1fr_1fr] min-h-0">
+        <div className="border-r border-orange-500/20 min-w-0 min-h-0">
           <ChatPanel
             key={activeSessionId}
             sessionId={activeSessionId}
             engineId={effectiveEngine}
             onTurnComplete={(t) => setTurnId(t)}
             autoplay={autoplay}
+            seedPrompts={seedPrompts}
           />
         </div>
-        <div className="min-h-0">
-          <InspectorHost
-            engineId={effectiveEngine}
-            sessionId={activeSessionId}
-            turnId={turnId}
-          />
-        </div>
-      </div>
-      <div className="border-t border-orange-500/10 px-4 py-1 text-[10px] text-gray-500 flex gap-3">
-        {ENGINE_IDS.map((id) => (
-          <span key={id} className={ENABLED[id] ? '' : 'opacity-40'}>
-            {id}: {ENABLED[id] ? 'wired' : 'not yet'}
-          </span>
+        {ENGINE_IDS.map((id, i) => (
+          <div
+            key={id}
+            className={`min-w-0 min-h-0 ${
+              i < ENGINE_IDS.length - 1 ? 'border-r border-orange-500/10' : ''
+            }`}
+          >
+            <MemoryPanel
+              engineId={id}
+              sessionId={activeSessionId}
+              turnId={turnId}
+            />
+          </div>
         ))}
       </div>
     </div>
