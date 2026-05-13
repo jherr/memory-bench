@@ -1,0 +1,17 @@
+{
+  "id": "preference-contradictions-v1",
+  "title": "Stated preference contradicts later behavior",
+  "mode": "scientist",
+  "activeEngine": "hindsight",
+  "options": {
+    "interTurnDelayMs": 800,
+    "waitForSnapshot": true
+  },
+  "turns": [
+    { "user": "I really value getting up early. 6am is my ideal start time." },
+    { "user": "What's a good morning routine?" },
+    { "user": "Actually scratch that — I've been sleeping until 10am every day this week. Maybe I'm not actually a morning person." },
+    { "user": "So what kind of routine should I have?" },
+    { "user": "Be honest — based on what you know about me, what AM I, morning person or not?" }
+  ]
+}

@@ -1,0 +1,131 @@
+# memory-bench engines stack.  All three engines run from published images.
+#
+#   cp .env.example .env       # fill ANTHROPIC_API_KEY
+#   docker compose --profile engines up -d
+#
+# Hindsight: API 8888, UI 9999.  mem0: 8000.  Honcho: 8001.
+
+services:
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:latest
+    pull_policy: always
+    profiles: [engines, hindsight]
+    ports:
+      - "8888:8888"
+      - "9999:9999"
+    environment:
+      HINDSIGHT_API_LLM_PROVIDER: anthropic
+      HINDSIGHT_API_LLM_MODEL: ${MODEL_EXTRACTION:-claude-haiku-4-5}
+      HINDSIGHT_API_LLM_API_KEY: ${ANTHROPIC_API_KEY}
+      HINDSIGHT_API_HOST: 0.0.0.0
+      HINDSIGHT_API_PORT: 8888
+    volumes:
+      - hindsight_pg:/home/hindsight/.pg0
+
+  mem0:
+    image: mem0/mem0-api-server:latest
+    pull_policy: always
+    profiles: [engines, mem0]
+    ports:
+      - "8000:8000"
+    environment:
+      AUTH_DISABLED: "true"
+      JWT_SECRET: dev-secret
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      MEM0_TELEMETRY: "false"
+      DATABASE_URL: postgresql://postgres:postgres@mem0-postgres:5432/postgres
+      APP_DB_NAME: mem0_app
+    depends_on:
+      mem0-postgres:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+
+  mem0-postgres:
+    image: ankane/pgvector:v0.5.1
+    profiles: [engines, mem0]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - mem0_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  honcho-api:
+    image: ghcr.io/plastic-labs/honcho:latest
+    pull_policy: always
+    profiles: [engines, honcho]
+    entrypoint: ["sh", "/app/docker/entrypoint.sh"]
+    ports:
+      - "8001:8000"
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://postgres:postgres@honcho-postgres:5432/postgres
+      CACHE_URL: redis://honcho-redis:6379/0?suppress=true
+      CACHE_ENABLED: "true"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      HONCHO_LLM_PROVIDER: anthropic
+      HONCHO_LLM_MODEL: ${MODEL_EXTRACTION:-claude-haiku-4-5}
+      AUTH_USE_AUTH: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('localhost', 8000), timeout=2); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      honcho-postgres:
+        condition: service_healthy
+      honcho-redis:
+        condition: service_healthy
+
+  honcho-deriver:
+    image: ghcr.io/plastic-labs/honcho:latest
+    pull_policy: always
+    profiles: [engines, honcho]
+    entrypoint: ["/app/.venv/bin/python", "-m", "src.deriver"]
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://postgres:postgres@honcho-postgres:5432/postgres
+      CACHE_URL: redis://honcho-redis:6379/0?suppress=true
+      CACHE_ENABLED: "true"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      HONCHO_LLM_PROVIDER: anthropic
+      HONCHO_LLM_MODEL: ${MODEL_EXTRACTION:-claude-haiku-4-5}
+    depends_on:
+      honcho-api:
+        condition: service_healthy
+
+  honcho-postgres:
+    image: pgvector/pgvector:pg15
+    profiles: [engines, honcho]
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - honcho_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  honcho-redis:
+    image: redis:8.2
+    profiles: [engines, honcho]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hindsight_pg: {}
+  mem0_pgdata: {}
+  honcho_pgdata: {}

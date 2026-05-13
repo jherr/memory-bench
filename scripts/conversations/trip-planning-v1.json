@@ -1,0 +1,17 @@
+{
+  "id": "trip-planning-v1",
+  "title": "Trip planning — preferences emerge over turns",
+  "mode": "scientist",
+  "activeEngine": "hindsight",
+  "options": {
+    "interTurnDelayMs": 800,
+    "waitForSnapshot": true
+  },
+  "turns": [
+    { "user": "I'm planning a 5-day trip and I want help thinking through it." },
+    { "user": "I have a really hard time with humid heat. Anything over 80°F with humidity is a nightmare for me." },
+    { "user": "Also, I love mountains. Coastal cities are fine but mountains are the priority." },
+    { "user": "Given all that, what would you suggest for late June?" },
+    { "user": "Cool. Now if I told you my partner has a peanut allergy and we're vegetarian, does that change your recommendation?" }
+  ]
+}
