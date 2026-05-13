@@ -173,24 +173,35 @@ export const honchoEngine: MemoryEngine = {
     const userId = scope.userId ?? 'demo-user'
     const result = await timed(async () => {
       const userPeer = await getUserPeer(userId)
-      const page = await userPeer.conclusions.list({ size: 100 })
-      return page.items
+      return userPeer.representation()
     })
     if (!result.ok) {
       return { engine: 'honcho', facts: [], takenAt: new Date().toISOString() }
     }
-    const facts: Array<MemoryFact> = result.data
-      .map((c, i) => {
-        const text = c?.content ?? ''
-        if (!text) return null
-        return {
-          id: c?.id ?? `honcho-${i}`,
-          text,
-          source: 'conclusion',
-          createdAt: c?.createdAt ?? undefined,
+    const raw =
+      typeof result.data === 'string'
+        ? result.data
+        : ((result.data as any)?.representation ?? '')
+    const lineRe = /^\[(?<ts>[^\]]+)\]\s+(?<text>.+)$/
+    const facts: Array<MemoryFact> = raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line && !line.startsWith('##') && !line.startsWith('Explicit Observations'),
+      )
+      .map((line, i) => {
+        const m = line.match(lineRe)
+        if (m && m.groups) {
+          return {
+            id: `honcho-${m.groups.ts}-${i}`,
+            text: m.groups.text,
+            source: 'observation',
+            createdAt: m.groups.ts,
+          }
         }
+        return { id: `honcho-${i}`, text: line, source: 'representation' }
       })
-      .filter((f): f is MemoryFact => f !== null)
     return { engine: 'honcho', facts, takenAt: new Date().toISOString() }
   },
 }
