@@ -1,14 +1,10 @@
 import { useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
-import fs from 'node:fs'
-import path from 'node:path'
+import { createServerFn } from '@tanstack/react-start'
 
 import { InspectorHost } from '#/components/memory/InspectorHost'
-import { getSnapshotsAtTurn, getTurns } from '#/server/db/repo'
 import { ENGINE_IDS } from '#/lib/memory/types'
 import type { EngineId } from '#/lib/memory/types'
-
-const RUNS_DIR = path.resolve(process.cwd(), 'data', 'runs')
 
 type RunIndex = {
   id: string
@@ -20,12 +16,22 @@ type RunIndex = {
 type SessionSnap = {
   sessionId: string
   turnCount: number
-  snapshotsAtMaxTurn: Record<EngineId, unknown>
+  snapshotsAtMaxTurnJson: Record<EngineId, string | null>
 }
 
-export const Route = createFileRoute('/runs/$runId')({
-  loader: async ({ params }) => {
-    const indexPath = path.join(RUNS_DIR, `${params.runId}.json`)
+type RunLoaderData = {
+  index: RunIndex
+  sessions: Array<SessionSnap>
+}
+
+const fetchRunData = createServerFn({ method: 'GET' })
+  .inputValidator((data: { runId: string }) => data)
+  .handler(async ({ data }): Promise<RunLoaderData> => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const { getSnapshotsAtTurn, getTurns } = await import('#/server/db/repo')
+    const RUNS_DIR = path.resolve(process.cwd(), 'data', 'runs')
+    const indexPath = path.join(RUNS_DIR, `${data.runId}.json`)
     if (!fs.existsSync(indexPath)) {
       throw new Error('run not found')
     }
@@ -35,28 +41,24 @@ export const Route = createFileRoute('/runs/$runId')({
         const turns = getTurns(sid)
         const maxTurn = turns.at(-1)?.id ?? 0
         const snaps = maxTurn > 0 ? getSnapshotsAtTurn(sid, maxTurn, 'post') : []
-        const byEngine: Record<EngineId, unknown> = {
+        const byEngine: Record<EngineId, string | null> = {
           hindsight: null,
           mem0: null,
           honcho: null,
         }
         for (const s of snaps) {
-          try {
-            byEngine[s.engine as EngineId] = JSON.parse(s.dataJson)
-          } catch {
-            byEngine[s.engine as EngineId] = null
-          }
+          byEngine[s.engine as EngineId] = s.dataJson
         }
         return {
           sessionId: sid,
           turnCount: turns.length,
-          snapshotsAtMaxTurn: byEngine,
+          snapshotsAtMaxTurnJson: byEngine,
         }
       } catch {
         return {
           sessionId: sid,
           turnCount: 0,
-          snapshotsAtMaxTurn: {
+          snapshotsAtMaxTurnJson: {
             hindsight: null,
             mem0: null,
             honcho: null,
@@ -65,6 +67,11 @@ export const Route = createFileRoute('/runs/$runId')({
       }
     })
     return { index, sessions }
+  })
+
+export const Route = createFileRoute('/runs/$runId')({
+  loader: async ({ params }): Promise<RunLoaderData> => {
+    return await fetchRunData({ data: { runId: params.runId } })
   },
   component: RunsPage,
 })
@@ -72,6 +79,15 @@ export const Route = createFileRoute('/runs/$runId')({
 function RunsPage() {
   const { index, sessions } = Route.useLoaderData()
   const [engine, setEngine] = useState<EngineId>('hindsight')
+
+  const parseSnap = (raw: string | null): unknown => {
+    if (!raw) return null
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return null
+    }
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-900 text-white">
@@ -115,7 +131,7 @@ function RunsPage() {
                 engineId={engine}
                 sessionId={s.sessionId}
                 turnId={s.turnCount}
-                data={s.snapshotsAtMaxTurn[engine] ?? null}
+                data={parseSnap(s.snapshotsAtMaxTurnJson[engine])}
               />
             </div>
           </div>

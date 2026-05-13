@@ -31,14 +31,6 @@ function ChatBenchPage() {
   const [mode, setMode] = useState<'explorer' | 'scientist'>('explorer')
   const [run, setRun] = useState<RunState | null>(null)
 
-  if (!nativeSessionId) {
-    return (
-      <div className="flex items-center justify-center h-screen text-gray-400">
-        loading session…
-      </div>
-    )
-  }
-
   const activeSessionId =
     run && run.plan.kind === 'triple'
       ? run.plan.sessionIds[run.currentIdx]
@@ -71,6 +63,14 @@ function ChatBenchPage() {
       },
     }
   }, [run, navigate])
+
+  if (!nativeSessionId || !activeSessionId) {
+    return (
+      <div className="flex items-center justify-center h-screen text-gray-400">
+        loading session…
+      </div>
+    )
+  }
 
   const handleStart = (plan: RunPlan) => {
     setRun({ plan, currentIdx: 0 })

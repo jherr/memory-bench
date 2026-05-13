@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import { ConsolidationToggle } from '#/components/memory/ConsolidationToggle'
 import { InspectorHost } from '#/components/memory/InspectorHost'
 import { TurnTimeline } from '#/components/memory/TurnTimeline'
-import { getSessionMeta } from '#/server/db/repo'
-import { getSnapshotsAtTurn, getTurns } from '#/server/db/repo'
 import { ENGINE_IDS } from '#/lib/memory/types'
 import type { EngineId } from '#/lib/memory/types'
 
@@ -22,33 +21,32 @@ type ScrubLoaderData = {
     assistantContent: string
     activeEngine: EngineId
   }>
-  snapshotsByEngine: Record<EngineId, unknown>
+  snapshotsByEngineJson: Record<EngineId, string | null>
   meta: {
     modelChat: string | null
     modelExtraction: string | null
   }
 }
 
-export const Route = createFileRoute('/chat/$sessionId/scrub/$turnN')({
-  validateSearch: phaseSearch,
-  loaderDeps: ({ search }) => ({ phase: search.phase }),
-  loader: async ({ params, deps }): Promise<ScrubLoaderData> => {
-    const turnN = Number(params.turnN)
-    const allTurns = getTurns(params.sessionId)
-    const upTo = allTurns.filter((t) => t.id <= turnN)
-    const snaps = getSnapshotsAtTurn(params.sessionId, turnN, deps.phase)
-    const meta = getSessionMeta(params.sessionId)
-    const byEngine: Record<EngineId, unknown> = {
+const fetchScrubData = createServerFn({ method: 'GET' })
+  .inputValidator(
+    (data: { sessionId: string; turnN: number; phase: 'pre' | 'post' }) => data,
+  )
+  .handler(async ({ data }): Promise<ScrubLoaderData> => {
+    const { getSessionMeta, getSnapshotsAtTurn, getTurns } = await import(
+      '#/server/db/repo'
+    )
+    const allTurns = getTurns(data.sessionId)
+    const upTo = allTurns.filter((t) => t.id <= data.turnN)
+    const snaps = getSnapshotsAtTurn(data.sessionId, data.turnN, data.phase)
+    const meta = getSessionMeta(data.sessionId)
+    const byEngine: Record<EngineId, string | null> = {
       hindsight: null,
       mem0: null,
       honcho: null,
     }
     for (const s of snaps) {
-      try {
-        byEngine[s.engine as EngineId] = JSON.parse(s.dataJson)
-      } catch {
-        byEngine[s.engine as EngineId] = null
-      }
+      byEngine[s.engine as EngineId] = s.dataJson
     }
     return {
       turns: upTo.map((t) => ({
@@ -58,12 +56,25 @@ export const Route = createFileRoute('/chat/$sessionId/scrub/$turnN')({
         assistantContent: t.assistantContent,
         activeEngine: t.activeEngine as EngineId,
       })),
-      snapshotsByEngine: byEngine,
+      snapshotsByEngineJson: byEngine,
       meta: {
         modelChat: meta?.modelChat ?? null,
         modelExtraction: meta?.modelExtraction ?? null,
       },
     }
+  })
+
+export const Route = createFileRoute('/chat/$sessionId/scrub/$turnN')({
+  validateSearch: phaseSearch,
+  loaderDeps: ({ search }) => ({ phase: search.phase }),
+  loader: async ({ params, deps }): Promise<ScrubLoaderData> => {
+    return await fetchScrubData({
+      data: {
+        sessionId: params.sessionId,
+        turnN: Number(params.turnN),
+        phase: deps.phase,
+      },
+    })
   },
   component: ScrubPage,
 })
@@ -75,6 +86,22 @@ function ScrubPage() {
   const data = Route.useLoaderData()
   const [showTranscript, setShowTranscript] = useState(true)
   const turnIdNum = Number(turnN)
+
+  const snapshotsByEngine: Record<EngineId, unknown> = {
+    hindsight: null,
+    mem0: null,
+    honcho: null,
+  }
+  for (const id of ENGINE_IDS) {
+    const raw = data.snapshotsByEngineJson[id]
+    if (raw) {
+      try {
+        snapshotsByEngine[id] = JSON.parse(raw)
+      } catch {
+        snapshotsByEngine[id] = null
+      }
+    }
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-900 text-white">
@@ -141,7 +168,7 @@ function ScrubPage() {
                 engineId={id}
                 sessionId={sessionId}
                 turnId={turnIdNum}
-                data={data.snapshotsByEngine[id] ?? null}
+                data={snapshotsByEngine[id] ?? null}
               />
             </div>
           ))}
