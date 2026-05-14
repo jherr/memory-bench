@@ -22,6 +22,11 @@ export async function resetHindsightBank(
   await client.deleteBank(`${userId}__${sessionId}`)
 }
 
+/**
+ * Hindsight bank id: `{userId}__{sessionId}`.
+ * Session-bucketed so each bench session gets an isolated bank (unlike mem0 user_id
+ * or Honcho's durable peer), which keeps the live demo predictable after "Reset all".
+ */
 function bankIdFor(scope: Scope): string {
   const userId = scope.userId ?? 'demo-user'
   return `${userId}__${scope.sessionId}`

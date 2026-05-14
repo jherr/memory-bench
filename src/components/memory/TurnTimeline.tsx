@@ -75,7 +75,7 @@ export function TurnTimeline({
         return (
           <Link
             key={row.turnId}
-            to="/chat/$sessionId/scrub/$turnN"
+            to="/$sessionId/scrub/$turnN"
             params={{ sessionId, turnN: String(row.turnId) }}
             className={`group flex flex-col items-center min-w-[28px] px-1 py-0.5 rounded text-[10px] hover:bg-gray-800 ${
               isHighlighted ? 'bg-gray-800 ring-1 ring-orange-400/50' : ''

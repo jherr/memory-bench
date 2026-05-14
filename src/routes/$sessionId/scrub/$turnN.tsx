@@ -76,7 +76,7 @@ const fetchScrubData = createServerFn({ method: 'GET' })
     }
   })
 
-export const Route = createFileRoute('/chat/$sessionId/scrub/$turnN')({
+export const Route = createFileRoute('/$sessionId/scrub/$turnN')({
   validateSearch: phaseSearch,
   loaderDeps: ({ search }) => ({ phase: search.phase }),
   loader: async ({ params, deps }): Promise<ScrubLoaderData> => {
@@ -100,10 +100,10 @@ function ScrubPage() {
   const turnIdNum = Number(turnN)
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] bg-gray-900 text-white">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-orange-500/20">
+    <div className="flex flex-col min-h-svh h-svh bg-gray-900 text-white">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-orange-500/20 shrink-0">
         <div className="flex items-center gap-3">
-          <Link to="/chat" className="text-orange-300 hover:text-orange-200">
+          <Link to="/" className="text-orange-300 hover:text-orange-200">
             ← back to live
           </Link>
           <h1 className="text-lg font-bold">
@@ -121,6 +121,7 @@ function ScrubPage() {
             }
           />
           <button
+            type="button"
             onClick={() => setShowTranscript((v) => !v)}
             className="text-xs text-gray-400 hover:text-white"
           >
@@ -128,7 +129,7 @@ function ScrubPage() {
           </button>
         </div>
       </div>
-      <div className="border-b border-orange-500/10">
+      <div className="border-b border-orange-500/10 shrink-0">
         <TurnTimeline
           sessionId={sessionId}
           refreshKey={0}

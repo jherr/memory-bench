@@ -4,6 +4,9 @@ export const Route = createFileRoute('/api/debug/last-recall')({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        if (process.env.NODE_ENV === 'production') {
+          return new Response(null, { status: 404 })
+        }
         const url = new URL(request.url)
         const sessionId = url.searchParams.get('sessionId')
         const g = globalThis as any

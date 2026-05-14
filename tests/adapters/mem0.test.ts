@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mem0Engine } from '#/server/memory/mem0'
 
@@ -17,6 +17,67 @@ async function isReachable(): Promise<boolean> {
 
 const reachable = await isReachable()
 const desc = reachable ? describe : describe.skip
+
+describe('mem0 adapter (mocked HTTP)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('POST /search sends rerank, threshold, user_id and omits run_id', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ results: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await mem0Engine.recall({ sessionId: 's1' }, 'favorite color')
+    const searchCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/search'))
+    expect(searchCall).toBeDefined()
+    const init = searchCall![1] as RequestInit
+    expect(init.method).toBe('POST')
+    const body = JSON.parse(init.body as string)
+    expect(body).toEqual({
+      query: 'favorite color',
+      user_id: 'demo-user',
+      rerank: true,
+      threshold: 0.1,
+    })
+    expect('run_id' in body).toBe(false)
+  })
+
+  it('POST /memories sends messages + user_id only', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await mem0Engine.retainTurn(
+      { sessionId: 's1' },
+      { user: 'hi', assistant: 'hello' },
+    )
+    const memCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]).includes('/memories') && (c[1] as RequestInit)?.method === 'POST',
+    )
+    expect(memCall).toBeDefined()
+    const body = JSON.parse((memCall![1] as RequestInit).body as string)
+    expect(body).toEqual({
+      messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+      ],
+      user_id: 'demo-user',
+    })
+    expect('run_id' in body).toBe(false)
+  })
+})
 
 desc('mem0 adapter (live)', () => {
   const sessionId = `vitest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

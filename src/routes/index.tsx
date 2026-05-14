@@ -1,87 +1,200 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/')({ component: App })
+import { ChatPanel } from '#/components/memory/ChatPanel'
+import { EngineSelector } from '#/components/memory/EngineSelector'
+import { MemoryPanel } from '#/components/memory/MemoryPanel'
+import { ModeToggle } from '#/components/memory/ModeToggle'
+import { ScriptRunner } from '#/components/memory/ScriptRunner'
+import type { RunPlan } from '#/components/memory/ScriptRunner'
+import { TurnTimeline } from '#/components/memory/TurnTimeline'
+import { resetSessionId, useSessionId } from '#/lib/memory/useSessionId'
+import { listScripts } from '#/lib/scripts/loader'
+import type { EngineId } from '#/lib/memory/types'
+import { ENGINE_IDS } from '#/lib/memory/types'
 
-function App() {
+const ENABLED: Record<EngineId, boolean> = {
+  hindsight: true,
+  mem0: true,
+  honcho: true,
+}
+
+type RunState = {
+  plan: RunPlan
+  currentIdx: number
+}
+
+function ChatBenchPage() {
+  const navigate = useNavigate()
+  const nativeSessionId = useSessionId()
+  const [active, setActive] = useState<EngineId>('mem0')
+  const [turnId, setTurnId] = useState(0)
+  const [mode, setMode] = useState<'explorer' | 'scientist'>('explorer')
+  const [run, setRun] = useState<RunState | null>(null)
+  const [resetting, setResetting] = useState(false)
+
+  const seedPrompts = useMemo(
+    () =>
+      listScripts().flatMap((s) =>
+        s.turns.map((t, i) => ({
+          label: `${s.id.split('-')[0]} ${i + 1}`,
+          text: t.user,
+        })),
+      ),
+    [],
+  )
+
+  const activeSessionId =
+    run && run.plan.kind === 'triple'
+      ? run.plan.sessionIds[run.currentIdx]
+      : nativeSessionId
+
+  const engineLocked = mode === 'scientist' && turnId > 0
+  const effectiveEngine =
+    run && run.plan.kind === 'triple' ? run.plan.script.activeEngine : active
+
+  const autoplay = useMemo(() => {
+    if (!run) return undefined
+    return {
+      messages: run.plan.script.turns.map((t) => t.user),
+      interTurnDelayMs: run.plan.script.options.interTurnDelayMs,
+      onDone: () => {
+        if (run.plan.kind === 'single') {
+          setRun(null)
+          return
+        }
+        const nextIdx = run.currentIdx + 1
+        if (nextIdx >= run.plan.sessionIds.length) {
+          const runId = run.plan.runId
+          setRun(null)
+          setTurnId(0)
+          navigate({ to: '/runs/$runId', params: { runId } })
+        } else {
+          setRun({ plan: run.plan, currentIdx: nextIdx })
+          setTurnId(0)
+        }
+      },
+    }
+  }, [run, navigate])
+
+  if (!nativeSessionId || !activeSessionId) {
+    return (
+      <div className="flex items-center justify-center min-h-svh bg-gray-900 text-gray-400">
+        loading session…
+      </div>
+    )
+  }
+
+  const handleStart = (plan: RunPlan) => {
+    setRun({ plan, currentIdx: 0 })
+    if (plan.kind === 'triple') setTurnId(0)
+  }
+
+  const handleResetAll = async () => {
+    if (
+      !window.confirm(
+        'Reset all memories? This deletes every fact in Hindsight, mem0, and Honcho and rotates your session.',
+      )
+    ) {
+      return
+    }
+    setResetting(true)
+    try {
+      const res = await fetch('/api/sessions/reset', { method: 'POST' })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        window.alert(`Reset failed: ${res.status} ${text}`)
+        return
+      }
+      resetSessionId()
+      window.location.reload()
+    } catch (err) {
+      window.alert(`Reset error: ${(err as Error).message}`)
+    } finally {
+      setResetting(false)
+    }
+  }
+
   return (
-    <main className="page-wrap px-4 pb-8 pt-14">
-      <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10 sm:py-14">
-        <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.32),transparent_66%)]" />
-        <div className="pointer-events-none absolute -bottom-20 -right-20 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(47,106,74,0.18),transparent_66%)]" />
-        <p className="island-kicker mb-3">TanStack Start Base Template</p>
-        <h1 className="display-title mb-5 max-w-3xl text-4xl leading-[1.02] font-bold tracking-tight text-[var(--sea-ink)] sm:text-6xl">
-          Start simple, ship quickly.
-        </h1>
-        <p className="mb-8 max-w-2xl text-base text-[var(--sea-ink-soft)] sm:text-lg">
-          This base starter intentionally keeps things light: two routes, clean
-          structure, and the essentials you need to build from scratch.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <a
-            href="/about"
-            className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-5 py-2.5 text-sm font-semibold text-[var(--lagoon-deep)] no-underline transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]"
+    <div className="flex flex-col min-h-svh h-svh bg-gray-900 text-white">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-orange-500/20 shrink-0">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-lg font-bold bg-linear-to-r from-orange-500 to-red-600 text-transparent bg-clip-text">
+            memory-bench
+          </h1>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+              recall:
+            </span>
+            <EngineSelector
+              active={effectiveEngine}
+              onChange={setActive}
+              enabled={ENABLED}
+              locked={engineLocked || !!run}
+            />
+          </div>
+          <ModeToggle mode={mode} onChange={setMode} hasTurns={turnId > 0} />
+          <ScriptRunner
+            isRunning={!!run}
+            onStart={handleStart}
+            onCancel={() => setRun(null)}
+          />
+          <button
+            type="button"
+            onClick={handleResetAll}
+            disabled={resetting || !!run}
+            className="px-3 py-1 rounded text-xs font-medium border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Wipe all memory across Hindsight, mem0, Honcho, and local data dirs"
           >
-            About This Starter
-          </a>
-          <a
-            href="https://tanstack.com/router"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full border border-[rgba(23,58,64,0.2)] bg-white/50 px-5 py-2.5 text-sm font-semibold text-[var(--sea-ink)] no-underline transition hover:-translate-y-0.5 hover:border-[rgba(23,58,64,0.35)]"
-          >
-            Router Guide
-          </a>
+            {resetting ? 'resetting…' : 'Reset all'}
+          </button>
         </div>
-      </section>
-
-      <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          [
-            'Type-Safe Routing',
-            'Routes and links stay in sync across every page.',
-          ],
-          [
-            'Server Functions',
-            'Call server code from your UI without creating API boilerplate.',
-          ],
-          [
-            'Streaming by Default',
-            'Ship progressively rendered responses for faster experiences.',
-          ],
-          [
-            'Tailwind Native',
-            'Design quickly with utility-first styling and reusable tokens.',
-          ],
-        ].map(([title, desc], index) => (
-          <article
-            key={title}
-            className="island-shell feature-card rise-in rounded-2xl p-5"
-            style={{ animationDelay: `${index * 90 + 80}ms` }}
+        <div className="text-xs text-gray-500 font-mono">
+          session: {activeSessionId.slice(0, 8)}…
+          {run?.plan.kind === 'triple' && (
+            <span className="ml-2 text-orange-300">
+              run {run.currentIdx + 1}/{run.plan.sessionIds.length}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="border-b border-orange-500/10 shrink-0">
+        <TurnTimeline
+          key={activeSessionId}
+          sessionId={activeSessionId}
+          refreshKey={turnId}
+        />
+      </div>
+      <div className="flex-1 grid grid-cols-[2fr_1fr_1fr_1fr] min-h-0 min-w-0">
+        <div className="border-r border-orange-500/20 min-w-0 min-h-0">
+          <ChatPanel
+            key={activeSessionId}
+            sessionId={activeSessionId}
+            engineId={effectiveEngine}
+            onTurnComplete={(t) => setTurnId(t)}
+            autoplay={autoplay}
+            seedPrompts={seedPrompts}
+          />
+        </div>
+        {ENGINE_IDS.map((id, i) => (
+          <div
+            key={id}
+            className={`min-w-0 min-h-0 ${
+              i < ENGINE_IDS.length - 1 ? 'border-r border-orange-500/10' : ''
+            }`}
           >
-            <h2 className="mb-2 text-base font-semibold text-[var(--sea-ink)]">
-              {title}
-            </h2>
-            <p className="m-0 text-sm text-[var(--sea-ink-soft)]">{desc}</p>
-          </article>
+            <MemoryPanel
+              engineId={id}
+              sessionId={activeSessionId}
+              turnId={turnId}
+            />
+          </div>
         ))}
-      </section>
-
-      <section className="island-shell mt-8 rounded-2xl p-6">
-        <p className="island-kicker mb-2">Quick Start</p>
-        <ul className="m-0 list-disc space-y-2 pl-5 text-sm text-[var(--sea-ink-soft)]">
-          <li>
-            Edit <code>src/routes/index.tsx</code> to customize the home page.
-          </li>
-          <li>
-            Update <code>src/components/Header.tsx</code> and{' '}
-            <code>src/components/Footer.tsx</code> for brand links.
-          </li>
-          <li>
-            Add routes in <code>src/routes</code> and tweak visual tokens in{' '}
-            <code>src/styles.css</code>.
-          </li>
-        </ul>
-      </section>
-    </main>
+      </div>
+    </div>
   )
 }
+
+export const Route = createFileRoute('/')({
+  component: ChatBenchPage,
+})

@@ -1,4 +1,14 @@
-Welcome to your new TanStack Start app! 
+# Memory bench (3 engines)
+
+This app compares **Hindsight**, **mem0**, and **Honcho** side by side on the same chat turns: one streaming chat column plus three fact panels. Recall runs before each model reply; retain runs after the assistant finishes (server-side middleware).
+
+**Quick start:** copy [`.env.example`](.env.example) to `.env`, fill API keys, start optional engine containers (`docker compose --profile engines up -d`), then `pnpm install && pnpm dev` and open **`http://localhost:3000/`** — the memory bench is the whole UI (no separate landing page).
+
+Details, engine semantics, and Docker notes: [STATUS.md](STATUS.md). Fairness / asymmetry notes: [docs/fairness.md](docs/fairness.md).
+
+---
+
+Welcome to your new TanStack Start app!
 
 # Getting Started
 
@@ -33,10 +43,9 @@ This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
 
 If you prefer not to use Tailwind CSS:
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `pnpm add @tailwindcss/vite tailwindcss --dev`
+1. Replace the Tailwind import in `src/styles.css` with your own styles
+2. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
+3. Uninstall the packages: `pnpm add @tailwindcss/vite tailwindcss --dev`
 
 
 ## Deploy with Nitro

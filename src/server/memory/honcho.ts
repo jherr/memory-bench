@@ -11,6 +11,37 @@ import type {
   RetainReceipt,
 } from '#/lib/memory/types'
 
+const HONCHO_LINE_RE = /^\[(?<ts>[^\]]+)\]\s+(?<text>.+)$/
+
+/**
+ * Parse Honcho `peer.representation()` text into panel rows. We intentionally do not
+ * use `conclusions.list()` here: in practice it surfaces noisy meta lines (for example
+ * "user is able to communicate via messaging") instead of contentful preferences.
+ */
+export function parseHonchoRepresentationToFacts(raw: string): Array<MemoryFact> {
+  return raw
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter(
+      (line: string) =>
+        line.length > 0 &&
+        !line.startsWith('##') &&
+        !line.startsWith('Explicit Observations'),
+    )
+    .map((line: string, i: number) => {
+      const m = line.match(HONCHO_LINE_RE)
+      if (m?.groups?.ts && m.groups.text) {
+        return {
+          id: `honcho-${m.groups.ts}-${i}`,
+          text: m.groups.text,
+          source: 'observation',
+          createdAt: m.groups.ts,
+        }
+      }
+      return { id: `honcho-${i}`, text: line, source: 'representation' }
+    })
+}
+
 const HONCHO_URL = process.env.HONCHO_URL ?? 'http://localhost:8001'
 const HONCHO_APP = process.env.HONCHO_APP_NAME ?? 'memory-bench'
 const HONCHO_API_KEY = process.env.HONCHO_API_KEY ?? ''
@@ -181,27 +212,8 @@ export const honchoEngine: MemoryEngine = {
     const raw =
       typeof result.data === 'string'
         ? result.data
-        : ((result.data as any)?.representation ?? '')
-    const lineRe = /^\[(?<ts>[^\]]+)\]\s+(?<text>.+)$/
-    const facts: Array<MemoryFact> = raw
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(
-        (line) =>
-          line && !line.startsWith('##') && !line.startsWith('Explicit Observations'),
-      )
-      .map((line, i) => {
-        const m = line.match(lineRe)
-        if (m && m.groups) {
-          return {
-            id: `honcho-${m.groups.ts}-${i}`,
-            text: m.groups.text,
-            source: 'observation',
-            createdAt: m.groups.ts,
-          }
-        }
-        return { id: `honcho-${i}`, text: line, source: 'representation' }
-      })
+        : ((result.data as { representation?: string })?.representation ?? '')
+    const facts = parseHonchoRepresentationToFacts(raw)
     return { engine: 'honcho', facts, takenAt: new Date().toISOString() }
   },
 }

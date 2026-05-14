@@ -19,6 +19,6 @@ The other shared decisions are:
 - **Same LLM** for extraction across all three: `claude-haiku-4-5`. Env: `MODEL_EXTRACTION`.
 - **Same chat model:** `claude-sonnet-4-5`. Env: `MODEL_CHAT`.
 - **Same recall query**: the raw user message. No LLM rewriting in front of recall.
-- **Same scope keys**: `userId` defaults to `demo-user`. `sessionId` maps to `bank_id` (Hindsight, composed with userId), `run_id` (mem0), and `session.id` (Honcho).
+- **Scope keys** (not identical across engines — that is intentional): `userId` defaults to `demo-user`. **Hindsight** uses a per-session bank id `userId__sessionId`. **mem0** scopes storage by `user_id` only (facts survive session rotation). **Honcho** uses the app workspace plus peer id and a `session` for chat/recall wiring; derived knowledge can persist beyond a single session.
 
 When you find divergence, that is the experiment. Don't hide it.

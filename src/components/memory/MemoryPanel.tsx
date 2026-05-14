@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import type { EngineId, FactList } from '#/lib/memory/types'
+
+import { useIntervalPolling } from './usePolling'
+
+const POLL_INTERVAL_MS = 2000
 
 const ENGINE_THEME: Record<
   EngineId,
@@ -44,11 +48,12 @@ const EMPTY_HINT: Record<EngineId, string> = {
 export function MemoryPanel({
   engineId,
   sessionId,
-  turnId,
+  turnId: _turnId,
   data,
 }: {
   engineId: EngineId
   sessionId: string
+  /** Present for scrub/live parity; live polling keys only on session + engine. */
   turnId: number
   data?: FactList | null
 }) {
@@ -61,12 +66,13 @@ export function MemoryPanel({
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isScrubMode) {
-      setFacts(data ?? null)
-      return
-    }
-    let cancelled = false
-    const load = async (showSpinner: boolean) => {
+    if (!isScrubMode) return
+    setFacts(data ?? null)
+  }, [isScrubMode, data])
+
+  const pollLoad = useCallback(
+    async (pass: 'sync' | 'repeat') => {
+      const showSpinner = pass === 'sync'
       if (showSpinner) setLoading(true)
       try {
         const res = await fetch(
@@ -74,23 +80,18 @@ export function MemoryPanel({
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = (await res.json()) as FactList
-        if (!cancelled) {
-          setFacts(json)
-          setErr(null)
-        }
+        setFacts(json)
+        setErr(null)
       } catch (e) {
-        if (!cancelled) setErr((e as Error).message)
+        setErr((e as Error).message)
       } finally {
-        if (!cancelled && showSpinner) setLoading(false)
+        if (showSpinner) setLoading(false)
       }
-    }
-    void load(true)
-    const handle = setInterval(() => void load(false), 2000)
-    return () => {
-      cancelled = true
-      clearInterval(handle)
-    }
-  }, [engineId, sessionId, turnId, isScrubMode, data])
+    },
+    [engineId, sessionId],
+  )
+
+  useIntervalPolling(!isScrubMode, POLL_INTERVAL_MS, [engineId, sessionId], pollLoad)
 
   const items = facts?.facts ?? []
 
