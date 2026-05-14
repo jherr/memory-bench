@@ -3,6 +3,8 @@ import { Link } from '@tanstack/react-router'
 
 import type { EngineId } from '#/lib/memory/types'
 
+type RetainSource = 'middleware' | 'tool' | null
+
 type TimelineRow = {
   turnId: number
   ts: string
@@ -12,6 +14,7 @@ type TimelineRow = {
     ok: boolean
     latencyMs: number
     error: string | null
+    source: RetainSource
   }>
 }
 
@@ -70,7 +73,12 @@ export function TurnTimeline({
   return (
     <div className="flex gap-1 px-3 py-1 overflow-x-auto">
       {rows.map((row) => {
-        const byEngine = new Map(row.perEngine.map((p) => [p.engine, p]))
+        const byEngine = new Map<EngineId, Array<TimelineRow['perEngine'][number]>>()
+        for (const p of row.perEngine) {
+          const list = byEngine.get(p.engine) ?? []
+          list.push(p)
+          byEngine.set(p.engine, list)
+        }
         const isHighlighted = highlightTurnId === row.turnId
         return (
           <Link
@@ -87,23 +95,40 @@ export function TurnTimeline({
             </span>
             <div className="flex gap-0.5 mt-0.5">
               {ENGINES.map((id) => {
-                const status = byEngine.get(id)
+                const entries = byEngine.get(id) ?? []
                 const color = COLORS[id]
-                const cls = !status
-                  ? color.pending
-                  : status.ok
-                    ? color.ok
-                    : color.err
+                if (entries.length === 0) {
+                  return (
+                    <span
+                      key={id}
+                      className={`w-2 h-2 rounded-sm ${color.pending}`}
+                      title={`${id}: no retain`}
+                    />
+                  )
+                }
                 return (
-                  <span
-                    key={id}
-                    className={`w-2 h-2 rounded-sm ${cls}`}
-                    title={`${id}: ${
-                      status
-                        ? `${status.ok ? 'ok' : `err — ${status.error}`} (${status.latencyMs}ms)`
-                        : 'no retain'
-                    }`}
-                  />
+                  <span key={id} className="flex gap-px">
+                    {entries.map((status, i) => {
+                      const cls = status.ok ? color.ok : color.err
+                      const src = status.source ?? 'middleware'
+                      const isTool = src === 'tool'
+                      return (
+                        <span
+                          key={i}
+                          className={`relative w-2 h-2 rounded-sm ${cls} ${
+                            isTool ? 'ring-1 ring-white/60' : ''
+                          }`}
+                          title={`[${src}] ${id}: ${
+                            status.ok ? 'ok' : `err — ${status.error}`
+                          } (${status.latencyMs}ms)`}
+                        >
+                          {isTool ? (
+                            <span className="absolute inset-0 m-auto w-[3px] h-[3px] rounded-full bg-white/90" />
+                          ) : null}
+                        </span>
+                      )
+                    })}
+                  </span>
                 )
               })}
             </div>

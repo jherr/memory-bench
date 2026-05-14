@@ -1,3 +1,5 @@
+import type { Tool } from '@tanstack/ai'
+
 export type EngineId = 'hindsight' | 'mem0' | 'honcho'
 
 export const ENGINE_IDS: ReadonlyArray<EngineId> = ['hindsight', 'mem0', 'honcho']
@@ -28,7 +30,14 @@ export interface RecallFragment {
 export interface RecallResult {
   engine: EngineId
   latencyMs: number
-  fragments: Array<RecallFragment>
+  /** Pre-rendered block ready to drop into the LLM system prompt. */
+  systemPrompt: string
+  /** Discrete items when the engine produces them; omitted for synthesized output. */
+  fragments?: Array<RecallFragment>
+  /** Tools the engine recommends exposing to the LLM. Empty for engines that don't expose tools. */
+  tools: Array<Tool>
+  /** System prompt addition that explains when/how to use the tools. Empty when tools is empty. */
+  toolGuidance: string
   raw: unknown
 }
 
@@ -51,7 +60,7 @@ export interface FactList {
   takenAt: string
 }
 
-export interface MemoryEngine {
+export interface MemoryDriver {
   id: EngineId
   retainTurn(scope: Scope, input: RetainInput): Promise<Array<RetainReceipt>>
   recall(scope: Scope, query: string): Promise<RecallResult>

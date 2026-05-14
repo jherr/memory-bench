@@ -1,4 +1,5 @@
 import { listEnabledEngines, getEngine } from './index'
+import { drainToolEvents } from './tool-event-buffer'
 import {
   ensureSessionMeta,
   insertRecall,
@@ -60,7 +61,22 @@ export async function runTurn(args: {
   })
 
   if (recall) {
-    insertRecall(sessionId, turnId, recall.result, recall.query)
+    insertRecall(sessionId, turnId, recall.result, recall.query, {
+      source: 'middleware',
+    })
+  }
+
+  const toolEvents = drainToolEvents(sessionId)
+  for (const ev of toolEvents.recalls) {
+    insertRecall(sessionId, turnId, ev.result, ev.query, { source: 'tool' })
+  }
+  if (toolEvents.retains.length > 0) {
+    insertRetains(
+      sessionId,
+      turnId,
+      toolEvents.retains.map((e) => e.receipt),
+      { source: 'tool' },
+    )
   }
 
   const engines = listEnabledEngines()
@@ -85,7 +101,7 @@ export async function runTurn(args: {
     }
   })
 
-  insertRetains(sessionId, turnId, receipts)
+  insertRetains(sessionId, turnId, receipts, { source: 'middleware' })
 
   void capturePreSnapshots(sessionId, turnId, engines.map((e) => e.id))
   schedulePostSnapshots(sessionId, turnId, engines.map((e) => e.id))

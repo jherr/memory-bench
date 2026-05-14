@@ -59,12 +59,16 @@ export function insertTurn(
   return row[0].id
 }
 
+export type RetainSource = 'middleware' | 'tool'
+
 export function insertRetains(
   sessionId: string,
   turnId: number,
   receipts: Array<RetainReceipt>,
+  opts: { source?: RetainSource } = {},
 ) {
   if (receipts.length === 0) return
+  const source = opts.source ?? 'middleware'
   const db = getSessionDb(sessionId)
   db.insert(retains)
     .values(
@@ -75,6 +79,7 @@ export function insertRetains(
         latencyMs: r.latencyMs,
         rawJson: JSON.stringify(r.raw ?? null),
         error: r.error ?? null,
+        source,
       })),
     )
     .run()
@@ -85,7 +90,9 @@ export function insertRecall(
   turnId: number,
   result: RecallResult,
   query: string,
+  opts: { source?: RetainSource } = {},
 ) {
+  const source = opts.source ?? 'middleware'
   const db = getSessionDb(sessionId)
   db.insert(recalls)
     .values({
@@ -93,8 +100,9 @@ export function insertRecall(
       engine: result.engine,
       query,
       latencyMs: result.latencyMs,
-      fragmentsJson: JSON.stringify(result.fragments),
+      fragmentsJson: JSON.stringify(result.fragments ?? []),
       rawJson: JSON.stringify(result.raw ?? null),
+      source,
     })
     .run()
 }
@@ -156,6 +164,7 @@ export function getTimelineRows(sessionId: string) {
       ok: r.ok,
       latencyMs: r.latencyMs,
       error: r.error,
+      source: (r.source as RetainSource | null) ?? null,
     })),
   }))
 }

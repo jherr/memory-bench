@@ -1,6 +1,6 @@
 import type {
   FactList,
-  MemoryEngine,
+  MemoryDriver,
   MemoryFact,
   MemorySnapshot,
   RecallResult,
@@ -77,7 +77,7 @@ async function safeJson(
   }
 }
 
-export const mem0Engine: MemoryEngine = {
+export const mem0Engine: MemoryDriver = {
   id: 'mem0',
 
   async retainTurn(scope, input: RetainInput): Promise<Array<RetainReceipt>> {
@@ -122,18 +122,31 @@ export const mem0Engine: MemoryEngine = {
       return {
         engine: 'mem0',
         latencyMs: result.latencyMs,
+        systemPrompt: '',
         fragments: [],
+        tools: [],
+        toolGuidance: '',
         raw: { error: result.error },
       }
     }
     const items: Array<any> = result.data?.results ?? result.data ?? []
+    const fragments = items.map((m: any) => ({
+      text: m.memory ?? m.text ?? JSON.stringify(m),
+      source: m.id ?? 'mem0',
+    }))
+    const systemPrompt =
+      fragments.length === 0
+        ? ''
+        : `Recalled memory:\n${fragments
+            .map((f) => `- (${f.source}) ${f.text}`)
+            .join('\n')}`
     return {
       engine: 'mem0',
       latencyMs: result.latencyMs,
-      fragments: items.map((m: any) => ({
-        text: m.memory ?? m.text ?? JSON.stringify(m),
-        source: m.id ?? 'mem0',
-      })),
+      systemPrompt,
+      fragments,
+      tools: [],
+      toolGuidance: '',
       raw: result.data,
     }
   },

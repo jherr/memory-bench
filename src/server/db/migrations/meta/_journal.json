@@ -8,6 +8,13 @@
       "when": 1778694131236,
       "tag": "0000_minor_venus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1778782814250,
+      "tag": "0001_gifted_groot",
+      "breakpoints": true
     }
   ]
 }

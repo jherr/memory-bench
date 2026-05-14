@@ -3,7 +3,7 @@ import { chat, toServerSentEventsResponse } from '@tanstack/ai'
 import { anthropicText } from '@tanstack/ai-anthropic'
 
 import { runRecallForTurn, runTurn } from '#/server/memory/orchestrator'
-import type { EngineId } from '#/lib/memory/types'
+import type { EngineId, RecallResult } from '#/lib/memory/types'
 
 const MODEL_CHAT = (process.env.MODEL_CHAT ??
   'claude-sonnet-4-5') as Parameters<typeof anthropicText>[0]
@@ -13,14 +13,6 @@ const BASE_SYSTEM_PROMPT = `You are an experimental assistant inside a memory-be
 You have access to memory that was recalled for this turn. Use it freely if it is relevant; do not mention the recall step itself. If the recalled memory is empty, answer normally without commenting on its absence.
 
 Keep replies concise unless the user asks for depth.`
-
-function buildSystemPrompt(fragments: Array<{ text: string; source: string }>) {
-  if (fragments.length === 0) return BASE_SYSTEM_PROMPT
-  const lines = fragments
-    .map((f) => `- (${f.source}) ${f.text}`)
-    .join('\n')
-  return `${BASE_SYSTEM_PROMPT}\n\nRecalled memory:\n${lines}`
-}
 
 export const Route = createFileRoute('/api/chat')({
   server: {
@@ -64,15 +56,18 @@ export const Route = createFileRoute('/api/chat')({
                   .join('\n')
               : '')
 
-          let fragments: Array<{ text: string; source: string }> = []
-          let recallLatencyMs = 0
+          let recall: RecallResult | null = null
           if (sessionId && engineId && userText) {
-            const recall = await runRecallForTurn(sessionId, engineId, userText)
-            fragments = recall.fragments
-            recallLatencyMs = recall.latencyMs
+            recall = await runRecallForTurn(sessionId, engineId, userText)
           }
 
-          const systemPrompt = buildSystemPrompt(fragments)
+          const systemPrompt = [
+            BASE_SYSTEM_PROMPT,
+            recall?.toolGuidance ?? '',
+            recall?.systemPrompt ?? '',
+          ]
+            .filter((s) => s.length > 0)
+            .join('\n\n')
 
           const g = globalThis as any
           g.__lastRecallBySession = g.__lastRecallBySession ?? {}
@@ -81,9 +76,12 @@ export const Route = createFileRoute('/api/chat')({
               sessionId,
               engineId,
               query: userText,
-              fragments,
-              latencyMs: recallLatencyMs,
+              fragments: recall?.fragments ?? [],
+              latencyMs: recall?.latencyMs ?? 0,
               systemPrompt,
+              engineSystemPrompt: recall?.systemPrompt ?? '',
+              toolGuidance: recall?.toolGuidance ?? '',
+              toolCount: recall?.tools.length ?? 0,
               takenAt: new Date().toISOString(),
             }
           }
@@ -94,6 +92,7 @@ export const Route = createFileRoute('/api/chat')({
             adapter,
             systemPrompts: [systemPrompt],
             messages: messages as any,
+            tools: recall?.tools ?? [],
             abortController,
             middleware: [
               {
@@ -109,16 +108,13 @@ export const Route = createFileRoute('/api/chat')({
                         userMsg: userText,
                         assistantReply,
                         activeEngineId: engineId,
-                        recall: {
-                          engineId,
-                          result: {
-                            engine: engineId,
-                            latencyMs: recallLatencyMs,
-                            fragments,
-                            raw: null,
-                          },
-                          query: userText,
-                        },
+                        recall: recall
+                          ? {
+                              engineId,
+                              result: recall,
+                              query: userText,
+                            }
+                          : null,
                       })
                       const g2 = globalThis as any
                       g2.__lastTurnBySession = g2.__lastTurnBySession ?? {}

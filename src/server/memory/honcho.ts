@@ -3,7 +3,7 @@ import type { Peer, Session } from '@honcho-ai/sdk'
 
 import type {
   FactList,
-  MemoryEngine,
+  MemoryDriver,
   MemoryFact,
   MemorySnapshot,
   RecallResult,
@@ -112,7 +112,7 @@ async function timed<T>(
   }
 }
 
-export const honchoEngine: MemoryEngine = {
+export const honchoEngine: MemoryDriver = {
   id: 'honcho',
 
   async retainTurn(scope, input: RetainInput): Promise<Array<RetainReceipt>> {
@@ -152,17 +152,19 @@ export const honchoEngine: MemoryEngine = {
       return {
         engine: 'honcho',
         latencyMs: result.latencyMs,
-        fragments: [],
+        systemPrompt: '',
+        tools: [],
+        toolGuidance: '',
         raw: { error: result.error },
       }
     }
-    const text = result.data
+    const text = result.data ?? ''
     return {
       engine: 'honcho',
       latencyMs: result.latencyMs,
-      fragments: text
-        ? [{ text, source: 'representation' }]
-        : [],
+      systemPrompt: text,
+      tools: [],
+      toolGuidance: '',
       raw: { dialectic: text },
     }
   },

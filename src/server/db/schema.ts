@@ -34,6 +34,7 @@ export const retains = sqliteTable(
     latencyMs: integer('latency_ms').notNull(),
     rawJson: text('raw_json').notNull(),
     error: text('error'),
+    source: text('source', { enum: ['middleware', 'tool'] }),
   },
   (t) => [index('retains_engine_idx').on(t.engine)],
 )
@@ -50,6 +51,7 @@ export const recalls = sqliteTable(
     latencyMs: integer('latency_ms').notNull(),
     fragmentsJson: text('fragments_json').notNull(),
     rawJson: text('raw_json').notNull(),
+    source: text('source', { enum: ['middleware', 'tool'] }),
   },
   (t) => [index('recalls_engine_idx').on(t.engine)],
 )

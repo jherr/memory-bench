@@ -54,7 +54,10 @@ desc('honcho adapter (live)', () => {
   it('recall returns a structured result', async () => {
     const result = await honchoEngine.recall(scope, 'favorite color')
     expect(result.engine).toBe('honcho')
-    expect(Array.isArray(result.fragments)).toBe(true)
+    expect(typeof result.systemPrompt).toBe('string')
+    expect(result.fragments).toBeUndefined()
+    expect(result.tools).toEqual([])
+    expect(result.toolGuidance).toBe('')
   })
 
   it('inspect returns a snapshot with messages key', async () => {
