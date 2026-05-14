@@ -37,12 +37,20 @@ const ENGINE_THEME: Record<
     itemBorder: 'border-emerald-500/20',
     bullet: 'bg-emerald-500',
   },
+  tanmemory: {
+    label: 'TanMemory',
+    headerText: 'text-cyan-300',
+    headerBorder: 'border-cyan-500/30',
+    itemBorder: 'border-cyan-500/20',
+    bullet: 'bg-cyan-500',
+  },
 }
 
 const EMPTY_HINT: Record<EngineId, string> = {
   hindsight: 'No facts yet. State a durable preference or constraint to seed it.',
   mem0: 'No facts yet. mem0 distills facts from user/assistant pairs.',
   honcho: 'No facts yet. Honcho derives async — give it ~10s after a turn.',
+  tanmemory: 'No facts yet. TanMemory extracts facts after each turn and consolidates duplicates.',
 }
 
 export function MemoryPanel({

@@ -17,7 +17,17 @@ const ENABLED: Record<EngineId, boolean> = {
   hindsight: true,
   mem0: true,
   honcho: true,
+  tanmemory: true,
 }
+
+const ENGINE_LABELS: Record<EngineId, string> = {
+  hindsight: 'Hindsight',
+  mem0: 'mem0',
+  honcho: 'Honcho',
+  tanmemory: 'TanMemory',
+}
+
+const ENGINE_LIST = ENGINE_IDS.map((id) => ENGINE_LABELS[id]).join(', ')
 
 type RunState = {
   plan: RunPlan
@@ -93,7 +103,7 @@ function ChatBenchPage() {
   const handleResetAll = async () => {
     if (
       !window.confirm(
-        'Reset all memories? This deletes every fact in Hindsight, mem0, and Honcho and rotates your session.',
+        `Reset all memories? This deletes every fact in ${ENGINE_LIST} and rotates your session.`,
       )
     ) {
       return
@@ -144,7 +154,7 @@ function ChatBenchPage() {
             onClick={handleResetAll}
             disabled={resetting || !!run}
             className="px-3 py-1 rounded text-xs font-medium border border-red-500/30 text-red-300 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Wipe all memory across Hindsight, mem0, Honcho, and local data dirs"
+            title={`Wipe all memory across ${ENGINE_LIST} and local data dirs`}
           >
             {resetting ? 'resetting…' : 'Reset all'}
           </button>

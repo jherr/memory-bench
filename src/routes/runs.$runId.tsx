@@ -37,7 +37,12 @@ const fetchRunData = createServerFn({ method: 'GET' })
       throw new Error('run not found')
     }
     const index = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as RunIndex
-    const engineIds: Array<EngineId> = ['hindsight', 'mem0', 'honcho']
+    const engineIds = ENGINE_IDS
+    const emptyByEngine = (): Record<EngineId, Array<MemoryFact>> =>
+      Object.fromEntries(engineIds.map((id) => [id, [] as Array<MemoryFact>])) as Record<
+        EngineId,
+        Array<MemoryFact>
+      >
     const sessions: Array<SessionSnap> = await Promise.all(
       index.sessionIds.map(async (sid) => {
         try {
@@ -55,11 +60,7 @@ const fetchRunData = createServerFn({ method: 'GET' })
               }
             }),
           )
-          const byEngine: Record<EngineId, Array<MemoryFact>> = {
-            hindsight: [],
-            mem0: [],
-            honcho: [],
-          }
+          const byEngine = emptyByEngine()
           lists.forEach((l, i) => {
             byEngine[engineIds[i]] = l.facts
           })
@@ -72,11 +73,7 @@ const fetchRunData = createServerFn({ method: 'GET' })
           return {
             sessionId: sid,
             turnCount: 0,
-            factsByEngine: {
-              hindsight: [],
-              mem0: [],
-              honcho: [],
-            },
+            factsByEngine: emptyByEngine(),
           }
         }
       }),

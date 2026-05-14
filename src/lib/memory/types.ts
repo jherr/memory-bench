@@ -1,8 +1,13 @@
 import type { Tool } from '@tanstack/ai'
 
-export type EngineId = 'hindsight' | 'mem0' | 'honcho'
+export type EngineId = 'hindsight' | 'mem0' | 'honcho' | 'tanmemory'
 
-export const ENGINE_IDS: ReadonlyArray<EngineId> = ['hindsight', 'mem0', 'honcho']
+export const ENGINE_IDS: ReadonlyArray<EngineId> = [
+  'hindsight',
+  'mem0',
+  'honcho',
+  'tanmemory',
+]
 
 export interface Scope {
   sessionId: string

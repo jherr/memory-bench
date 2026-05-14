@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import fs from 'node:fs'
 import path from 'node:path'
+import * as sqliteVec from 'sqlite-vec'
 
 import * as schema from './schema'
 
@@ -52,6 +53,14 @@ function applyMigrations(db: Database.Database) {
     })
     tx()
   }
+  // vec0 virtual table for TanMemory. Drizzle can't model this, so it lives
+  // as an idempotent post-step. Dim 1536 matches text-embedding-3-small.
+  db.exec(
+    `CREATE VIRTUAL TABLE IF NOT EXISTS tanmemory_vec USING vec0(
+       memory_id INTEGER PRIMARY KEY,
+       embedding FLOAT[1536]
+     )`,
+  )
 }
 
 function evictIfNeeded() {
@@ -71,24 +80,35 @@ function evictIfNeeded() {
   }
 }
 
-export function getSessionDb(
-  sessionId: string,
-): BetterSQLite3Database<typeof schema> {
+function openSession(sessionId: string): Entry {
   const cached = cache.get(sessionId)
   if (cached) {
     cached.lastUsed = Date.now()
-    return cached.drz
+    return cached
   }
   ensureSessionsDir()
   const filePath = path.join(SESSIONS_DIR, `${sessionId}.sqlite`)
   const db = new Database(filePath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
+  sqliteVec.load(db)
   applyMigrations(db)
   const drz = drizzle(db, { schema })
-  cache.set(sessionId, { db, drz, lastUsed: Date.now() })
+  const entry: Entry = { db, drz, lastUsed: Date.now() }
+  cache.set(sessionId, entry)
   evictIfNeeded()
-  return drz
+  return entry
+}
+
+export function getSessionDb(
+  sessionId: string,
+): BetterSQLite3Database<typeof schema> {
+  return openSession(sessionId).drz
+}
+
+/** Raw better-sqlite3 handle for tables drizzle can't model (vec0 virtual tables). */
+export function getRawSessionDb(sessionId: string): Database.Database {
+  return openSession(sessionId).db
 }
 
 export function getSessionFilePath(sessionId: string): string {

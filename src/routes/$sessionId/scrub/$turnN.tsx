@@ -38,7 +38,7 @@ const fetchScrubData = createServerFn({ method: 'GET' })
     const allTurns = getTurns(data.sessionId)
     const upTo = allTurns.filter((t) => t.id <= data.turnN)
     const meta = getSessionMeta(data.sessionId)
-    const engineIds: Array<EngineId> = ['hindsight', 'mem0', 'honcho']
+    const engineIds = ENGINE_IDS
     const lists = await Promise.all(
       engineIds.map(async (id) => {
         try {
@@ -52,11 +52,9 @@ const fetchScrubData = createServerFn({ method: 'GET' })
         }
       }),
     )
-    const factsByEngine: Record<EngineId, Array<MemoryFact>> = {
-      hindsight: [],
-      mem0: [],
-      honcho: [],
-    }
+    const factsByEngine = Object.fromEntries(
+      engineIds.map((id) => [id, [] as Array<MemoryFact>]),
+    ) as Record<EngineId, Array<MemoryFact>>
     lists.forEach((list, i) => {
       factsByEngine[engineIds[i]] = list.facts
     })

@@ -88,8 +88,15 @@ export const Route = createFileRoute('/api/sessions/reset')({
           resetHoncho(),
           resetLocal(),
         ])
+        // TanMemory's storage is the per-session SQLite file itself, which
+        // resetLocal() wipes. Surface it as a distinct result so the UI / logs
+        // reflect the 4th engine, but it inherits resetLocal's status.
+        const tanmemory: ResetResult = local
         return new Response(
-          JSON.stringify({ ok: true, results: { hindsight, mem0, honcho, local } }),
+          JSON.stringify({
+            ok: true,
+            results: { hindsight, mem0, honcho, tanmemory, local },
+          }),
           { headers: { 'Content-Type': 'application/json' } },
         )
       },
