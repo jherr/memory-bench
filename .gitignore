@@ -12,6 +12,13 @@ dist-ssr
 __unconfig*
 todos.json
 
-data/sessions/*.sqlite
-data/sessions/*.sqlite-*
-data/runs/*.json
+.nx/cache
+.nx/workspace-data
+
+apps/*/node_modules
+apps/web/data/sessions/*.sqlite
+apps/web/data/sessions/*.sqlite-*
+apps/web/data/runs/*.json
+packages/*/dist
+apps/web/data/tanmemory-sessions/*.sqlite
+apps/web/data/tanmemory-sessions/*.sqlite-*

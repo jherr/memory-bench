@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "plugins": [
+    "@nx/vite/plugin"
+  ],
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test": {
+      "cache": true
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": [
+        "^typecheck"
+      ]
+    }
+  }
+}

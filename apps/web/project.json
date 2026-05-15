@@ -1,0 +1,49 @@
+{
+  "name": "web",
+  "projectType": "application",
+  "sourceRoot": "apps/web/src",
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "vite dev --port 3000"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "vite build"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "vite preview"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "vitest run"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "tsc --noEmit -p tsconfig.json"
+      }
+    },
+    "db:generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "drizzle-kit generate --config drizzle.config.ts"
+      }
+    }
+  }
+}
