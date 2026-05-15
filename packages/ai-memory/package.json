@@ -18,6 +18,10 @@
     "./honcho": {
       "types": "./src/providers/honcho/index.ts",
       "default": "./src/providers/honcho/index.ts"
+    },
+    "./middleware": {
+      "types": "./src/middleware.ts",
+      "default": "./src/middleware.ts"
     }
   },
   "scripts": {

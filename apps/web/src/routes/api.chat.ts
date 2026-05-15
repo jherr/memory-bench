@@ -1,11 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { chat, toServerSentEventsResponse } from '@tanstack/ai'
 import { anthropicText } from '@tanstack/ai-anthropic'
+import {
+  composeMemoryMiddleware,
+  createMemoryMiddleware,
+} from '@tanstack/ai-memory/middleware'
 import { z } from 'zod'
 
-import { runRecallForTurn, runTurn } from '#/server/memory/orchestrator'
+import {
+  getEngine,
+  listEnabledEngines,
+  runTurnPersist,
+} from '#/server/memory/orchestrator'
+import { toolEventSinkForSession } from '#/server/memory/tool-event-buffer'
 import { isValidEngineId, isValidSessionId } from '#/server/validation/ids'
-import type { EngineId, RecallResult } from '@tanstack/ai-memory'
+import type { EngineId, RetainReceipt } from '@tanstack/ai-memory'
+import type { MemoryRecallRef } from '@tanstack/ai-memory/middleware'
 
 const MODEL_CHAT = (process.env.MODEL_CHAT ??
   'claude-sonnet-4-5') as Parameters<typeof anthropicText>[0]
@@ -15,6 +25,38 @@ const BASE_SYSTEM_PROMPT = `You are an experimental assistant inside a memory-be
 You have access to memory that was recalled for this turn. Use it freely if it is relevant; do not mention the recall step itself. If the recalled memory is empty, answer normally without commenting on its absence.
 
 Keep replies concise unless the user asks for depth.`
+
+function createReceiptAggregator(
+  engineIds: Array<EngineId>,
+  persist: (
+    receipts: Array<RetainReceipt>,
+    recall: MemoryRecallRef | null,
+    assistant: string,
+  ) => Promise<void>,
+) {
+  const receiptBatches = new Map<EngineId, Array<RetainReceipt>>()
+  let recallRef: MemoryRecallRef | null = null
+  let assistantReply = ''
+  let persisted = false
+
+  return async (args: {
+    engineId: EngineId
+    assistant: string
+    receipts: Array<RetainReceipt>
+    recall: MemoryRecallRef | null
+  }) => {
+    receiptBatches.set(args.engineId, args.receipts)
+    recallRef = args.recall ?? recallRef
+    assistantReply = args.assistant || assistantReply
+
+    if (persisted || receiptBatches.size < engineIds.length) return
+    persisted = true
+    const receipts = engineIds.flatMap((engineId) =>
+      receiptBatches.get(engineId) ?? [],
+    )
+    await persist(receipts, recallRef, assistantReply)
+  }
+}
 
 const chatRequestSchema = z
   .object({
@@ -88,81 +130,29 @@ export const Route = createFileRoute('/api/chat')({
             )
           }
 
-          const lastUser = [...messages]
-            .reverse()
-            .find((m) => m.role === 'user')
-          const userText =
-            (lastUser?.content as string | undefined) ??
-            (Array.isArray(lastUser?.parts)
-              ? lastUser!.parts
-                  .filter((p) => p?.type === 'text')
-                  .map((p) => p.content)
-                  .join('\n')
-              : '')
-
-          let recall: RecallResult | null = null
-          if (sessionId && engineId && userText) {
-            recall = await runRecallForTurn(sessionId, engineId, userText)
-          }
-
-          const systemPrompt = [
-            BASE_SYSTEM_PROMPT,
-            recall?.toolGuidance ?? '',
-            recall?.systemPrompt ?? '',
-          ]
-            .filter((s) => s.length > 0)
-            .join('\n\n')
-
-          const g = globalThis as any
-          g.__lastRecallBySession = g.__lastRecallBySession ?? {}
-          if (sessionId) {
-            g.__lastRecallBySession[sessionId] = {
-              sessionId,
-              engineId,
-              query: userText,
-              fragments: recall?.fragments ?? [],
-              latencyMs: recall?.latencyMs ?? 0,
-              systemPrompt,
-              engineSystemPrompt: recall?.systemPrompt ?? '',
-              toolGuidance: recall?.toolGuidance ?? '',
-              toolCount: recall?.tools.length ?? 0,
-              takenAt: new Date().toISOString(),
-            }
-          }
-
           const adapter = anthropicText(MODEL_CHAT)
-
-          const stream = chat({
-            adapter,
-            systemPrompts: [systemPrompt],
-            messages: messages as any,
-            tools: recall?.tools ?? [],
-            abortController,
-            middleware: [
-              {
-                name: 'memory-retain',
-                onFinish: (ctx, info) => {
-                  if (!sessionId || !userText) return
-                  const assistantReply = info.content ?? ''
-                  if (!assistantReply) return
-                  const work = (async () => {
+          const memoryMiddleware = sessionId
+            ? (() => {
+                const engines = listEnabledEngines()
+                const engineIds = engines.map((engine) => engine.id)
+                const persistRetains = createReceiptAggregator(
+                  engineIds,
+                  async (receipts, recall, assistantReply) => {
                     try {
-                      const turn = await runTurn({
+                      const userMsg = recall?.query ?? ''
+                      if (!userMsg) return
+                      const turn = await runTurnPersist({
                         sessionId,
-                        userMsg: userText,
+                        userMsg,
                         assistantReply,
                         activeEngineId: engineId,
-                        recall: recall
-                          ? {
-                              engineId,
-                              result: recall,
-                              query: userText,
-                            }
-                          : null,
+                        receipts,
+                        recall,
+                        snapshotEngineIds: engineIds,
                       })
-                      const g2 = globalThis as any
-                      g2.__lastTurnBySession = g2.__lastTurnBySession ?? {}
-                      g2.__lastTurnBySession[sessionId] = {
+                      const g = globalThis as any
+                      g.__lastTurnBySession = g.__lastTurnBySession ?? {}
+                      g.__lastTurnBySession[sessionId] = {
                         turnId: turn.turnId,
                         receipts: turn.receipts,
                         takenAt: new Date().toISOString(),
@@ -170,11 +160,57 @@ export const Route = createFileRoute('/api/chat')({
                     } catch (err) {
                       console.error('[api/chat] server-side retain failed:', err)
                     }
-                  })()
-                  ctx.defer(work)
-                },
-              },
-            ],
+                  },
+                )
+
+                return [
+                  composeMemoryMiddleware(
+                    engines.map((engine) =>
+                      createMemoryMiddleware({
+                        engine: getEngine(engine.id),
+                        scope: {
+                          sessionId,
+                          toolEvents: toolEventSinkForSession(sessionId),
+                        },
+                        role:
+                          engine.id === engineId
+                            ? 'recall+retain'
+                            : 'retain-only',
+                        onRecallComplete: ({
+                          query,
+                          result,
+                          systemPrompts,
+                        }) => {
+                          const g = globalThis as any
+                          g.__lastRecallBySession =
+                            g.__lastRecallBySession ?? {}
+                          g.__lastRecallBySession[sessionId] = {
+                            sessionId,
+                            engineId,
+                            query,
+                            fragments: result.fragments ?? [],
+                            latencyMs: result.latencyMs,
+                            systemPrompt: systemPrompts.join('\n\n'),
+                            engineSystemPrompt: result.systemPrompt,
+                            toolGuidance: result.toolGuidance,
+                            toolCount: result.tools.length,
+                            takenAt: new Date().toISOString(),
+                          }
+                        },
+                        onRetainComplete: persistRetains,
+                      }),
+                    ),
+                  ),
+                ]
+              })()
+            : []
+
+          const stream = chat({
+            adapter,
+            systemPrompts: [BASE_SYSTEM_PROMPT],
+            messages: messages as any,
+            abortController,
+            middleware: memoryMiddleware,
           })
 
           return toServerSentEventsResponse(stream, { abortController })

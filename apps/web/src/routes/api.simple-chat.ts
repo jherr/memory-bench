@@ -1,11 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { chat, toServerSentEventsResponse } from '@tanstack/ai'
 import { anthropicText } from '@tanstack/ai-anthropic'
+import { createMemoryMiddleware } from '@tanstack/ai-memory/middleware'
 import { z } from 'zod'
 
-import { runRecallForTurn, runSimpleTurn } from '#/server/memory/orchestrator'
+import { getEngine, runSimpleTurnPersist } from '#/server/memory/orchestrator'
+import { toolEventSinkForSession } from '#/server/memory/tool-event-buffer'
 import { isValidEngineId, isValidSessionId } from '#/server/validation/ids'
-import type { EngineId, RecallResult } from '@tanstack/ai-memory'
+import type { EngineId } from '@tanstack/ai-memory'
 
 const MODEL_CHAT = (process.env.MODEL_CHAT ??
   'claude-sonnet-4-5') as Parameters<typeof anthropicText>[0]
@@ -88,81 +90,50 @@ export const Route = createFileRoute('/api/simple-chat')({
             )
           }
 
-          const lastUser = [...messages]
-            .reverse()
-            .find((m) => m.role === 'user')
-          const userText =
-            (lastUser?.content as string | undefined) ??
-            (Array.isArray(lastUser?.parts)
-              ? lastUser!.parts
-                  .filter((p) => p?.type === 'text')
-                  .map((p) => p.content)
-                  .join('\n')
-              : '')
-
-          let recall: RecallResult | null = null
-          if (sessionId && engineId && userText) {
-            recall = await runRecallForTurn(sessionId, engineId, userText)
-          }
-
-          const systemPrompt = [
-            BASE_SYSTEM_PROMPT,
-            recall?.toolGuidance ?? '',
-            recall?.systemPrompt ?? '',
-          ]
-            .filter((s) => s.length > 0)
-            .join('\n\n')
-
-          const g = globalThis as any
-          g.__lastRecallBySession = g.__lastRecallBySession ?? {}
-          if (sessionId) {
-            g.__lastRecallBySession[sessionId] = {
-              sessionId,
-              engineId,
-              query: userText,
-              fragments: recall?.fragments ?? [],
-              latencyMs: recall?.latencyMs ?? 0,
-              systemPrompt,
-              engineSystemPrompt: recall?.systemPrompt ?? '',
-              toolGuidance: recall?.toolGuidance ?? '',
-              toolCount: recall?.tools.length ?? 0,
-              takenAt: new Date().toISOString(),
-            }
-          }
-
           const adapter = anthropicText(MODEL_CHAT)
-
-          const stream = chat({
-            adapter,
-            systemPrompts: [systemPrompt],
-            messages: messages as any,
-            tools: recall?.tools ?? [],
-            abortController,
-            middleware: [
-              {
-                name: 'memory-retain',
-                onFinish: (ctx, info) => {
-                  if (!sessionId || !userText) return
-                  const assistantReply = info.content ?? ''
-                  if (!assistantReply) return
-                  const work = (async () => {
+          const memoryMiddleware = sessionId
+            ? [
+                createMemoryMiddleware({
+                  engine: getEngine(engineId),
+                  scope: {
+                    sessionId,
+                    toolEvents: toolEventSinkForSession(sessionId),
+                  },
+                  role: 'recall+retain',
+                  onRecallComplete: ({ query, result, systemPrompts }) => {
+                    const g = globalThis as any
+                    g.__lastRecallBySession = g.__lastRecallBySession ?? {}
+                    g.__lastRecallBySession[sessionId] = {
+                      sessionId,
+                      engineId,
+                      query,
+                      fragments: result.fragments ?? [],
+                      latencyMs: result.latencyMs,
+                      systemPrompt: systemPrompts.join('\n\n'),
+                      engineSystemPrompt: result.systemPrompt,
+                      toolGuidance: result.toolGuidance,
+                      toolCount: result.tools.length,
+                      takenAt: new Date().toISOString(),
+                    }
+                  },
+                  onRetainComplete: async ({
+                    user,
+                    assistant,
+                    receipts,
+                    recall,
+                  }) => {
                     try {
-                      const turn = await runSimpleTurn({
+                      const turn = await runSimpleTurnPersist({
                         sessionId,
-                        userMsg: userText,
-                        assistantReply,
+                        userMsg: user,
+                        assistantReply: assistant,
                         activeEngineId: engineId,
-                        recall: recall
-                          ? {
-                              engineId,
-                              result: recall,
-                              query: userText,
-                            }
-                          : null,
+                        receipts,
+                        recall,
                       })
-                      const g2 = globalThis as any
-                      g2.__lastTurnBySession = g2.__lastTurnBySession ?? {}
-                      g2.__lastTurnBySession[sessionId] = {
+                      const g = globalThis as any
+                      g.__lastTurnBySession = g.__lastTurnBySession ?? {}
+                      g.__lastTurnBySession[sessionId] = {
                         turnId: turn.turnId,
                         receipts: turn.receipts,
                         takenAt: new Date().toISOString(),
@@ -173,11 +144,17 @@ export const Route = createFileRoute('/api/simple-chat')({
                         err,
                       )
                     }
-                  })()
-                  ctx.defer(work)
-                },
-              },
-            ],
+                  },
+                }),
+              ]
+            : []
+
+          const stream = chat({
+            adapter,
+            systemPrompts: [BASE_SYSTEM_PROMPT],
+            messages: messages as any,
+            abortController,
+            middleware: memoryMiddleware,
           })
 
           return toServerSentEventsResponse(stream, { abortController })

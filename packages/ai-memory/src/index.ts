@@ -106,3 +106,13 @@ export type {
 } from './types/stages'
 export { applyConsolidationDecisions } from './utils'
 export { createComposedDriver, type ComposedDriverConfig } from './factory'
+export {
+  composeMemoryMiddleware,
+  createMemoryMiddleware,
+  getLastUserText,
+  type CreateMemoryMiddlewareOptions,
+  type MemoryMiddlewareRole,
+  type MemoryRecallCompleteInfo,
+  type MemoryRecallRef,
+  type MemoryRetainCompleteInfo,
+} from './middleware'

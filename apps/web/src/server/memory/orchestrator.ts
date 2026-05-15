@@ -26,7 +26,7 @@ function postDelayFor(engineId: EngineId): number {
   return engineId === 'honcho' ? HONCHO_POST_DELAY_MS : DEFAULT_POST_DELAY_MS
 }
 
-export { getEngine }
+export { getEngine, listEnabledEngines }
 
 export async function runRecallForTurn(
   sessionId: string,
@@ -40,6 +40,7 @@ export async function runRecallForTurn(
   )
 }
 
+/** @deprecated Route handlers should use middleware-driven retain and call runTurnPersist. */
 export async function runTurn(args: {
   sessionId: string
   userMsg: string
@@ -113,6 +114,71 @@ export async function runTurn(args: {
   return { turnId, receipts }
 }
 
+export async function runTurnPersist(args: {
+  sessionId: string
+  userMsg: string
+  assistantReply: string
+  activeEngineId: EngineId
+  receipts: Array<RetainReceipt>
+  recall?: { engineId: EngineId; result: RecallResult; query: string } | null
+  snapshotEngineIds?: Array<EngineId>
+}): Promise<{
+  turnId: number
+  receipts: Array<RetainReceipt>
+}> {
+  const {
+    sessionId,
+    userMsg,
+    assistantReply,
+    activeEngineId,
+    receipts,
+    recall,
+    snapshotEngineIds,
+  } = args
+
+  ensureSessionMeta(sessionId, {
+    mode: 'explorer',
+    modelChat: MODEL_CHAT,
+    modelExtraction: MODEL_EXTRACTION,
+  })
+
+  const turnId = insertTurn(sessionId, {
+    userContent: userMsg,
+    assistantContent: assistantReply,
+    activeEngine: activeEngineId,
+  })
+
+  if (recall) {
+    insertRecall(sessionId, turnId, recall.result, recall.query, {
+      source: 'middleware',
+    })
+  }
+
+  const toolEvents = drainToolEvents(sessionId)
+  for (const ev of toolEvents.recalls) {
+    insertRecall(sessionId, turnId, ev.result, ev.query, { source: 'tool' })
+  }
+  if (toolEvents.retains.length > 0) {
+    insertRetains(
+      sessionId,
+      turnId,
+      toolEvents.retains.map((e) => e.receipt),
+      { source: 'tool' },
+    )
+  }
+
+  insertRetains(sessionId, turnId, receipts, { source: 'middleware' })
+
+  const engineIds =
+    snapshotEngineIds ??
+    Array.from(new Set(receipts.map((receipt) => receipt.engine)))
+  void capturePreSnapshots(sessionId, turnId, engineIds)
+  schedulePostSnapshots(sessionId, turnId, engineIds)
+
+  return { turnId, receipts }
+}
+
+/** @deprecated Route handlers should use middleware-driven retain and call runSimpleTurnPersist. */
 export async function runSimpleTurn(args: {
   sessionId: string
   userMsg: string
@@ -160,6 +226,43 @@ export async function runSimpleTurn(args: {
         error: String(err),
       },
     ]
+  }
+
+  insertRetains(sessionId, turnId, receipts, { source: 'middleware' })
+
+  return { turnId, receipts }
+}
+
+export async function runSimpleTurnPersist(args: {
+  sessionId: string
+  userMsg: string
+  assistantReply: string
+  activeEngineId: EngineId
+  receipts: Array<RetainReceipt>
+  recall?: { engineId: EngineId; result: RecallResult; query: string } | null
+}): Promise<{
+  turnId: number
+  receipts: Array<RetainReceipt>
+}> {
+  const { sessionId, userMsg, assistantReply, activeEngineId, receipts, recall } =
+    args
+
+  ensureSessionMeta(sessionId, {
+    mode: 'explorer',
+    modelChat: MODEL_CHAT,
+    modelExtraction: MODEL_EXTRACTION,
+  })
+
+  const turnId = insertTurn(sessionId, {
+    userContent: userMsg,
+    assistantContent: assistantReply,
+    activeEngine: activeEngineId,
+  })
+
+  if (recall) {
+    insertRecall(sessionId, turnId, recall.result, recall.query, {
+      source: 'middleware',
+    })
   }
 
   insertRetains(sessionId, turnId, receipts, { source: 'middleware' })
