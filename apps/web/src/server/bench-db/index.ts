@@ -4,6 +4,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { assertSessionId } from '#/server/validation/ids'
 import * as schema from './schema'
 
 const migrationFiles = import.meta.glob('./migrations/*.sql', {
@@ -74,6 +75,7 @@ function evictIfNeeded() {
 }
 
 function openSession(sessionId: string): Entry {
+  assertSessionId(sessionId)
   const cached = cache.get(sessionId)
   if (cached) {
     cached.lastUsed = Date.now()
@@ -103,6 +105,7 @@ export function getRawSessionDb(sessionId: string): Database.Database {
 }
 
 export function getSessionFilePath(sessionId: string): string {
+  assertSessionId(sessionId)
   return path.join(SESSIONS_DIR, `${sessionId}.sqlite`)
 }
 

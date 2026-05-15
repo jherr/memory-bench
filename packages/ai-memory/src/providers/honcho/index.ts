@@ -56,6 +56,23 @@ const sessionCache = new Map<string, Promise<Session>>()
 const userPeerCache = new Map<string, Promise<Peer>>()
 let assistantPeerPromise: Promise<Peer> | null = null
 
+function getOrCreateCachedPromise<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  create: () => Promise<T>,
+): Promise<T> {
+  const existing = cache.get(key)
+  if (existing) return existing
+  const created = create().catch((err) => {
+    if (cache.get(key) === created) {
+      cache.delete(key)
+    }
+    throw err
+  })
+  cache.set(key, created)
+  return created
+}
+
 export async function resetHonchoWorkspace(): Promise<void> {
   try {
     const sessionsPage = await honcho.sessions({ size: 100 })
@@ -71,26 +88,25 @@ export async function resetHonchoWorkspace(): Promise<void> {
 }
 
 function getUserPeer(userId: string): Promise<Peer> {
-  let p = userPeerCache.get(userId)
-  if (!p) {
-    p = honcho.peer(userId)
-    userPeerCache.set(userId, p)
-  }
-  return p
+  return getOrCreateCachedPromise(userPeerCache, userId, () => honcho.peer(userId))
 }
 
 function getAssistantPeer(): Promise<Peer> {
-  if (!assistantPeerPromise) assistantPeerPromise = honcho.peer('assistant')
+  if (!assistantPeerPromise) {
+    assistantPeerPromise = honcho.peer('assistant').catch((err) => {
+      if (assistantPeerPromise) {
+        assistantPeerPromise = null
+      }
+      throw err
+    })
+  }
   return assistantPeerPromise
 }
 
 function getSession(sessionId: string): Promise<Session> {
-  let s = sessionCache.get(sessionId)
-  if (!s) {
-    s = honcho.session(sessionId)
-    sessionCache.set(sessionId, s)
-  }
-  return s
+  return getOrCreateCachedPromise(sessionCache, sessionId, () =>
+    honcho.session(sessionId),
+  )
 }
 
 async function timed<T>(

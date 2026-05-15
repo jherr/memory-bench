@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { chat, toServerSentEventsResponse } from '@tanstack/ai'
 import { anthropicText } from '@tanstack/ai-anthropic'
+import { z } from 'zod'
 
 import { runRecallForTurn, runSimpleTurn } from '#/server/memory/orchestrator'
+import { isValidEngineId, isValidSessionId } from '#/server/validation/ids'
 import type { EngineId, RecallResult } from '@tanstack/ai-memory'
 
 const MODEL_CHAT = (process.env.MODEL_CHAT ??
@@ -13,6 +15,37 @@ const BASE_SYSTEM_PROMPT = `You are a helpful assistant with access to persisten
 You may have memory recalled for this turn. Use it freely if it is relevant; do not mention the recall step itself. If the recalled memory is empty, answer normally without commenting on its absence.
 
 Keep replies concise unless the user asks for depth.`
+
+const chatRequestSchema = z
+  .object({
+    messages: z
+      .array(
+        z
+          .object({
+            role: z.enum(['user', 'assistant', 'tool']),
+            content: z.string().optional(),
+            parts: z
+              .array(
+                z.object({
+                  type: z.string(),
+                  content: z.string().optional(),
+                }),
+              )
+              .optional(),
+          })
+          .passthrough(),
+      )
+      .min(1),
+    data: z
+      .object({
+        sessionId: z.string().optional(),
+        engineId: z.string().optional(),
+      })
+      .optional(),
+    sessionId: z.string().optional(),
+    engineId: z.string().optional(),
+  })
+  .passthrough()
 
 export const Route = createFileRoute('/api/simple-chat')({
   server: {
@@ -25,19 +58,30 @@ export const Route = createFileRoute('/api/simple-chat')({
         const abortController = new AbortController()
 
         try {
-          const body = (await request.json()) as {
-            messages: Array<{
-              role: 'user' | 'assistant' | 'tool'
-              content?: string
-              parts?: Array<{ type: string; content?: string }>
-            }>
-            data?: { sessionId?: string; engineId?: EngineId }
-            sessionId?: string
-            engineId?: EngineId
+          const parsed = chatRequestSchema.safeParse(await request.json())
+          if (!parsed.success) {
+            return new Response(JSON.stringify({ error: 'invalid chat payload' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            })
           }
+          const body = parsed.data
           const messages = body.messages
           const sessionId = body.data?.sessionId ?? body.sessionId ?? ''
-          const engineId = (body.data?.engineId ?? body.engineId) as EngineId
+          const requestedEngineId = body.data?.engineId ?? body.engineId
+          if (sessionId && !isValidSessionId(sessionId)) {
+            return new Response(JSON.stringify({ error: 'invalid session id' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          }
+          if (requestedEngineId && !isValidEngineId(requestedEngineId)) {
+            return new Response(JSON.stringify({ error: 'invalid engine id' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          }
+          const engineId = (requestedEngineId ?? 'hindsight') as EngineId
           if (process.env.DEBUG_CHAT === '1') {
             console.log(
               `[api/simple-chat] hit: engine=${engineId} session=${sessionId?.slice(0, 12)} msgs=${messages?.length}`,
@@ -51,8 +95,8 @@ export const Route = createFileRoute('/api/simple-chat')({
             (lastUser?.content as string | undefined) ??
             (Array.isArray(lastUser?.parts)
               ? lastUser!.parts
-                  .filter((p: any) => p?.type === 'text')
-                  .map((p: any) => p.content)
+                  .filter((p) => p?.type === 'text')
+                  .map((p) => p.content)
                   .join('\n')
               : '')
 

@@ -3,6 +3,7 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 
 import { MemoryPanel } from '#/components/memory/MemoryPanel'
+import { assertRunId } from '#/server/validation/ids'
 import { ENGINE_IDS } from '@tanstack/ai-memory'
 import type { EngineId, FactList, MemoryFact } from '@tanstack/ai-memory'
 
@@ -27,6 +28,7 @@ type RunLoaderData = {
 const fetchRunData = createServerFn({ method: 'GET' })
   .inputValidator((data: { runId: string }) => data)
   .handler(async ({ data }): Promise<RunLoaderData> => {
+    assertRunId(data.runId)
     const fs = await import('node:fs')
     const path = await import('node:path')
     const { getTurns } = await import('#/server/bench-db')

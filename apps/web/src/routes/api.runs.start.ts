@@ -2,6 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { isValidScriptId, isValidSessionId } from '#/server/validation/ids'
+
 const RUNS_DIR = path.resolve(process.cwd(), 'data', 'runs')
 
 export const Route = createFileRoute('/api/runs/start')({
@@ -17,6 +19,21 @@ export const Route = createFileRoute('/api/runs/start')({
             JSON.stringify({ error: 'scriptId and sessionIds required' }),
             { status: 400, headers: { 'Content-Type': 'application/json' } },
           )
+        }
+        if (!isValidScriptId(body.scriptId)) {
+          return new Response(JSON.stringify({ error: 'invalid scriptId' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        if (
+          body.sessionIds.length === 0 ||
+          body.sessionIds.some((sessionId) => !isValidSessionId(sessionId))
+        ) {
+          return new Response(JSON.stringify({ error: 'invalid sessionIds' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          })
         }
         fs.mkdirSync(RUNS_DIR, { recursive: true })
         const runId = `${body.scriptId}-${Date.now()}`

@@ -39,17 +39,24 @@ export async function resetMem0User(userId: string): Promise<void> {
     : Array.isArray(json)
       ? json
       : []
-  await Promise.all(
+  const deleteResults = await Promise.all(
     items
       .map((m) => m?.id as string | undefined)
       .filter((id): id is string => !!id)
-      .map((id) =>
-        fetch(`${MEM0_URL}/memories/${encodeURIComponent(id)}`, {
+      .map(async (id) => {
+        const res = await fetch(`${MEM0_URL}/memories/${encodeURIComponent(id)}`, {
           method: 'DELETE',
           headers: authHeaders(),
-        }),
-      ),
+        })
+        return { id, ok: res.ok, status: res.status }
+      }),
   )
+  const failures = deleteResults.filter((result) => !result.ok)
+  if (failures.length > 0) {
+    throw new Error(
+      `mem0 delete fallback failed for ${failures.length} memories (first status: ${failures[0].status})`,
+    )
+  }
 }
 
 async function safeJson(
@@ -129,7 +136,8 @@ export const mem0Engine: MemoryDriver = {
         raw: { error: result.error },
       }
     }
-    const items: Array<any> = result.data?.results ?? result.data ?? []
+    const candidateItems = result.data?.results ?? result.data
+    const items: Array<any> = Array.isArray(candidateItems) ? candidateItems : []
     const fragments = items.map((m: any) => ({
       text: m.memory ?? m.text ?? JSON.stringify(m),
       source: m.id ?? 'mem0',

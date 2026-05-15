@@ -6,11 +6,17 @@ import { z } from 'zod'
 import { ConsolidationToggle } from '#/components/memory/ConsolidationToggle'
 import { MemoryPanel } from '#/components/memory/MemoryPanel'
 import { TurnTimeline } from '#/components/memory/TurnTimeline'
+import { isValidSessionId } from '#/server/validation/ids'
 import { ENGINE_IDS } from '@tanstack/ai-memory'
 import type { EngineId, FactList, MemoryFact } from '@tanstack/ai-memory'
 
 const phaseSearch = z.object({
   phase: z.enum(['pre', 'post']).default('post'),
+})
+const scrubInputSchema = z.object({
+  sessionId: z.string().refine(isValidSessionId, { message: 'Invalid session id' }),
+  turnN: z.number().int().positive(),
+  phase: z.enum(['pre', 'post']),
 })
 
 type ScrubLoaderData = {
@@ -29,9 +35,7 @@ type ScrubLoaderData = {
 }
 
 const fetchScrubData = createServerFn({ method: 'GET' })
-  .inputValidator(
-    (data: { sessionId: string; turnN: number; phase: 'pre' | 'post' }) => data,
-  )
+  .inputValidator((data) => scrubInputSchema.parse(data))
   .handler(async ({ data }): Promise<ScrubLoaderData> => {
     const { getSessionMeta, getTurns } = await import('#/server/bench-db')
     const { getEngine } = await import('#/server/memory/orchestrator')
@@ -78,10 +82,14 @@ export const Route = createFileRoute('/$sessionId/scrub/$turnN')({
   validateSearch: phaseSearch,
   loaderDeps: ({ search }) => ({ phase: search.phase }),
   loader: async ({ params, deps }): Promise<ScrubLoaderData> => {
+    const parsedTurn = Number(params.turnN)
+    if (!Number.isFinite(parsedTurn) || !Number.isInteger(parsedTurn) || parsedTurn <= 0) {
+      throw new Error('Invalid turn number')
+    }
     return await fetchScrubData({
       data: {
         sessionId: params.sessionId,
-        turnN: Number(params.turnN),
+        turnN: parsedTurn,
         phase: deps.phase,
       },
     })

@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 type ResetResult = 'ok' | { error: string }
+const RESET_TOKEN = process.env.SESSIONS_RESET_TOKEN
 
 async function resetHindsight(sessionIds: Array<string>): Promise<ResetResult> {
   try {
@@ -87,7 +88,22 @@ async function listKnownSessionIds(): Promise<Array<string>> {
 export const Route = createFileRoute('/api/sessions/reset')({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        if (process.env.NODE_ENV === 'production' && !RESET_TOKEN) {
+          return new Response(
+            JSON.stringify({ error: 'sessions reset disabled in production' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } },
+          )
+        }
+        if (RESET_TOKEN) {
+          const token = request.headers.get('x-reset-token')
+          if (token !== RESET_TOKEN) {
+            return new Response(JSON.stringify({ error: 'unauthorized' }), {
+              status: 401,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          }
+        }
         const sessionIds = await listKnownSessionIds()
         const [hindsight, mem0, honcho, local] = await Promise.all([
           resetHindsight(sessionIds),
