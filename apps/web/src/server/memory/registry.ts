@@ -1,8 +1,9 @@
 import { hindsightEngine } from '@tanstack/ai-memory/hindsight'
 import { honchoEngine } from '@tanstack/ai-memory/honcho'
 import { mem0Engine } from '@tanstack/ai-memory/mem0'
-import { tanmemoryEngine } from '@tanstack/ai-memory/tanmemory'
 import type { EngineId, MemoryDriver } from '@tanstack/ai-memory'
+
+import { createLocalDriver } from '#/memory/drivers/local'
 
 const REGISTRY: Partial<Record<EngineId, MemoryDriver>> = {}
 
@@ -13,7 +14,7 @@ export function registerEngine(engine: MemoryDriver): void {
 registerEngine(hindsightEngine)
 registerEngine(mem0Engine)
 registerEngine(honchoEngine)
-registerEngine(tanmemoryEngine)
+registerEngine(createLocalDriver())
 
 export function getEngine(id: EngineId): MemoryDriver {
   const engine = REGISTRY[id]

@@ -113,6 +113,60 @@ export async function runTurn(args: {
   return { turnId, receipts }
 }
 
+export async function runSimpleTurn(args: {
+  sessionId: string
+  userMsg: string
+  assistantReply: string
+  activeEngineId: EngineId
+  recall?: { engineId: EngineId; result: RecallResult; query: string } | null
+}): Promise<{
+  turnId: number
+  receipts: Array<RetainReceipt>
+}> {
+  const { sessionId, userMsg, assistantReply, activeEngineId, recall } = args
+
+  ensureSessionMeta(sessionId, {
+    mode: 'explorer',
+    modelChat: MODEL_CHAT,
+    modelExtraction: MODEL_EXTRACTION,
+  })
+
+  const turnId = insertTurn(sessionId, {
+    userContent: userMsg,
+    assistantContent: assistantReply,
+    activeEngine: activeEngineId,
+  })
+
+  if (recall) {
+    insertRecall(sessionId, turnId, recall.result, recall.query, {
+      source: 'middleware',
+    })
+  }
+
+  const engine = getEngine(activeEngineId)
+  let receipts: Array<RetainReceipt> = []
+  try {
+    receipts = await engine.retainTurn(
+      { sessionId },
+      { user: userMsg, assistant: assistantReply },
+    )
+  } catch (err) {
+    receipts = [
+      {
+        engine: activeEngineId,
+        ok: false,
+        latencyMs: 0,
+        raw: null,
+        error: String(err),
+      },
+    ]
+  }
+
+  insertRetains(sessionId, turnId, receipts, { source: 'middleware' })
+
+  return { turnId, receipts }
+}
+
 async function inspectEngines(
   sessionId: string,
   engineIds: Array<EngineId>,

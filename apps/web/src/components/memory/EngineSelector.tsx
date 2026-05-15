@@ -5,7 +5,7 @@ const COLORS: Record<EngineId, string> = {
   hindsight: 'from-orange-500/80 to-red-600/80',
   mem0: 'from-violet-500/80 to-fuchsia-600/80',
   honcho: 'from-emerald-500/80 to-teal-600/80',
-  tanmemory: 'from-cyan-500/80 to-sky-600/80',
+  local: 'from-cyan-500/80 to-sky-600/80',
 }
 
 export function EngineSelector({

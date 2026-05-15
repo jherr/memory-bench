@@ -1,12 +1,12 @@
 import type { Tool } from '@tanstack/ai'
 
-export type EngineId = 'hindsight' | 'mem0' | 'honcho' | 'tanmemory'
+export type EngineId = 'hindsight' | 'mem0' | 'honcho' | 'local'
 
 export const ENGINE_IDS: ReadonlyArray<EngineId> = [
   'hindsight',
   'mem0',
   'honcho',
-  'tanmemory',
+  'local',
 ]
 
 export interface ToolRetainEvent {
@@ -89,3 +89,20 @@ export interface MemoryDriver {
   inspect(scope: Scope): Promise<MemorySnapshot>
   listFacts(scope: Scope): Promise<FactList>
 }
+
+export type {
+  CandidateFact,
+  ConsolidationDecision,
+  Consolidator,
+  Embedder,
+  ExtractContext,
+  Extractor,
+  Fact,
+  FactFilter,
+  FactQuery,
+  FactStore,
+  Renderer,
+  ToolFactory,
+} from './types/stages'
+export { applyConsolidationDecisions } from './utils'
+export { createComposedDriver, type ComposedDriverConfig } from './factory'

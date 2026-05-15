@@ -9,8 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as MemoryBenchRouteImport } from './routes/memory-bench'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
+import { Route as ApiSimpleChatRouteImport } from './routes/api.simple-chat'
 import { Route as ApiChatRouteImport } from './routes/api.chat'
 import { Route as ApiSessionsResetRouteImport } from './routes/api.sessions.reset'
 import { Route as ApiSessionsImportRouteImport } from './routes/api.sessions.import'
@@ -24,6 +26,11 @@ import { Route as ApiSessionsSessionIdExportRouteImport } from './routes/api.ses
 import { Route as ApiMemoryEngineInspectRouteImport } from './routes/api.memory.$engine.inspect'
 import { Route as ApiMemoryEngineFactsRouteImport } from './routes/api.memory.$engine.facts'
 
+const MemoryBenchRoute = MemoryBenchRouteImport.update({
+  id: '/memory-bench',
+  path: '/memory-bench',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -32,6 +39,11 @@ const IndexRoute = IndexRouteImport.update({
 const RunsRunIdRoute = RunsRunIdRouteImport.update({
   id: '/runs/$runId',
   path: '/runs/$runId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSimpleChatRoute = ApiSimpleChatRouteImport.update({
+  id: '/api/simple-chat',
+  path: '/api/simple-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
@@ -99,7 +111,9 @@ const ApiMemoryEngineFactsRoute = ApiMemoryEngineFactsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/memory-bench': typeof MemoryBenchRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/simple-chat': typeof ApiSimpleChatRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/$sessionId/scrub/$turnN': typeof SessionIdScrubTurnNRoute
   '/api/debug/last-recall': typeof ApiDebugLastRecallRoute
@@ -115,7 +129,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/memory-bench': typeof MemoryBenchRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/simple-chat': typeof ApiSimpleChatRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/$sessionId/scrub/$turnN': typeof SessionIdScrubTurnNRoute
   '/api/debug/last-recall': typeof ApiDebugLastRecallRoute
@@ -132,7 +148,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/memory-bench': typeof MemoryBenchRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/simple-chat': typeof ApiSimpleChatRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/$sessionId/scrub/$turnN': typeof SessionIdScrubTurnNRoute
   '/api/debug/last-recall': typeof ApiDebugLastRecallRoute
@@ -150,7 +168,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/memory-bench'
     | '/api/chat'
+    | '/api/simple-chat'
     | '/runs/$runId'
     | '/$sessionId/scrub/$turnN'
     | '/api/debug/last-recall'
@@ -166,7 +186,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/memory-bench'
     | '/api/chat'
+    | '/api/simple-chat'
     | '/runs/$runId'
     | '/$sessionId/scrub/$turnN'
     | '/api/debug/last-recall'
@@ -182,7 +204,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/memory-bench'
     | '/api/chat'
+    | '/api/simple-chat'
     | '/runs/$runId'
     | '/$sessionId/scrub/$turnN'
     | '/api/debug/last-recall'
@@ -199,7 +223,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MemoryBenchRoute: typeof MemoryBenchRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiSimpleChatRoute: typeof ApiSimpleChatRoute
   RunsRunIdRoute: typeof RunsRunIdRoute
   SessionIdScrubTurnNRoute: typeof SessionIdScrubTurnNRoute
   ApiDebugLastRecallRoute: typeof ApiDebugLastRecallRoute
@@ -216,6 +242,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/memory-bench': {
+      id: '/memory-bench'
+      path: '/memory-bench'
+      fullPath: '/memory-bench'
+      preLoaderRoute: typeof MemoryBenchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -228,6 +261,13 @@ declare module '@tanstack/react-router' {
       path: '/runs/$runId'
       fullPath: '/runs/$runId'
       preLoaderRoute: typeof RunsRunIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/simple-chat': {
+      id: '/api/simple-chat'
+      path: '/api/simple-chat'
+      fullPath: '/api/simple-chat'
+      preLoaderRoute: typeof ApiSimpleChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/chat': {
@@ -319,7 +359,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MemoryBenchRoute: MemoryBenchRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiSimpleChatRoute: ApiSimpleChatRoute,
   RunsRunIdRoute: RunsRunIdRoute,
   SessionIdScrubTurnNRoute: SessionIdScrubTurnNRoute,
   ApiDebugLastRecallRoute: ApiDebugLastRecallRoute,

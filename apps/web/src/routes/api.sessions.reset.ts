@@ -41,8 +41,16 @@ async function resetLocal(): Promise<ResetResult> {
     const { closeAllSessions, getSessionsDir } = await import(
       '#/server/bench-db'
     )
+    const { closeAllLocalSessions, getLocalSessionsDir } = await import(
+      '#/memory/drivers/local'
+    )
     closeAllSessions()
-    const dirs = [getSessionsDir(), path.resolve(process.cwd(), 'data', 'runs')]
+    closeAllLocalSessions()
+    const dirs = [
+      getSessionsDir(),
+      getLocalSessionsDir(),
+      path.resolve(process.cwd(), 'data', 'runs'),
+    ]
     for (const dir of dirs) {
       if (!fs.existsSync(dir)) continue
       for (const name of fs.readdirSync(dir)) {
@@ -87,14 +95,10 @@ export const Route = createFileRoute('/api/sessions/reset')({
           resetHoncho(),
           resetLocal(),
         ])
-        // TanMemory's storage is the per-session SQLite file itself, which
-        // resetLocal() wipes. Surface it as a distinct result so the UI / logs
-        // reflect the 4th engine, but it inherits resetLocal's status.
-        const tanmemory: ResetResult = local
         return new Response(
           JSON.stringify({
             ok: true,
-            results: { hindsight, mem0, honcho, tanmemory, local },
+            results: { hindsight, mem0, honcho, local },
           }),
           { headers: { 'Content-Type': 'application/json' } },
         )

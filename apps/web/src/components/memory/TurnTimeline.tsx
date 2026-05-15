@@ -34,14 +34,14 @@ const COLORS: Record<EngineId, { ok: string; err: string; pending: string }> = {
     err: 'bg-red-500',
     pending: 'bg-emerald-500/20',
   },
-  tanmemory: {
+  local: {
     ok: 'bg-cyan-500/70',
     err: 'bg-red-500',
     pending: 'bg-cyan-500/20',
   },
 }
 
-const ENGINES: Array<EngineId> = ['hindsight', 'mem0', 'honcho', 'tanmemory']
+const ENGINES: Array<EngineId> = ['hindsight', 'mem0', 'honcho', 'local']
 
 export function TurnTimeline({
   sessionId,

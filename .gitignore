@@ -22,3 +22,5 @@ apps/web/data/runs/*.json
 packages/*/dist
 apps/web/data/tanmemory-sessions/*.sqlite
 apps/web/data/tanmemory-sessions/*.sqlite-*
+apps/web/data/local-sessions/*.sqlite
+apps/web/data/local-sessions/*.sqlite-*

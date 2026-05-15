@@ -30,6 +30,7 @@ export function ChatPanel({
   onTurnComplete,
   autoplay,
   seedPrompts,
+  chatEndpoint = '/api/chat',
 }: {
   sessionId: string
   engineId: EngineId
@@ -40,6 +41,7 @@ export function ChatPanel({
     onDone?: () => void
   }
   seedPrompts?: Array<{ label: string; text: string }>
+  chatEndpoint?: string
 }) {
   const [input, setInput] = useState('')
   const [lastRecall, setLastRecall] = useState<LastRecall | null>(null)
@@ -50,7 +52,7 @@ export function ChatPanel({
   const lastIsLoadingRef = useRef(false)
 
   const { messages, sendMessage, isLoading } = useChat({
-    connection: fetchServerSentEvents('/api/chat'),
+    connection: fetchServerSentEvents(chatEndpoint),
     body: { sessionId, engineId },
     onFinish: async (assistantMessage) => {
       const assistantText = extractText(assistantMessage.parts)
