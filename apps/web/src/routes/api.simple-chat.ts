@@ -64,19 +64,26 @@ export const Route = createFileRoute("/api/simple-chat")({
           }
           const engineId = (requestedEngineId ?? "hindsight") as EngineId;
 
+          const memoryEnabled =
+            body.data?.memoryEnabled ?? body.memoryEnabled ?? true;
+
           const adapter = anthropicText(MODEL_CHAT);
-          const memoryMiddleware = createMemoryMiddleware({
-            engine: getEngine(engineId),
-            scope: { sessionId },
-            role: "recall+retain",
-          });
+          const middleware = memoryEnabled
+            ? [
+                createMemoryMiddleware({
+                  engine: getEngine(engineId),
+                  scope: { sessionId },
+                  role: "recall+retain",
+                }),
+              ]
+            : [];
 
           const stream = chat({
             adapter,
             systemPrompts: [BASE_SYSTEM_PROMPT],
             messages: messages as any,
             abortController,
-            middleware: [memoryMiddleware],
+            middleware,
           });
 
           return toServerSentEventsResponse(stream, { abortController });

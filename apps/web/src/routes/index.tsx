@@ -20,6 +20,7 @@ const ENGINE_LIST = ENGINE_IDS.join(', ')
 function SimpleChatPage() {
   const sessionId = useSessionId()
   const [engineId, setEngineId] = useState<EngineId>('local')
+  const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [turnId, setTurnId] = useState(0)
   const [resetting, setResetting] = useState(false)
 
@@ -65,12 +66,44 @@ function SimpleChatPage() {
           </h1>
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-wide text-gray-500">
+              memory:
+            </span>
+            <div className="flex gap-1" role="group" aria-label="memory toggle">
+              <button
+                type="button"
+                onClick={() => setMemoryEnabled(true)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  memoryEnabled
+                    ? 'bg-linear-to-r from-emerald-500/80 to-teal-600/80 text-white'
+                    : 'bg-gray-800/50 text-gray-400 border border-orange-500/10 hover:text-orange-300'
+                }`}
+                title="Use the selected provider for recall + retain"
+              >
+                on
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemoryEnabled(false)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  !memoryEnabled
+                    ? 'bg-linear-to-r from-amber-500/80 to-orange-600/80 text-white'
+                    : 'bg-gray-800/50 text-gray-400 border border-orange-500/10 hover:text-orange-300'
+                }`}
+                title="Bypass memory — chat against the bare LLM for an A/B demo"
+              >
+                off
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-gray-500">
               provider:
             </span>
             <EngineSelector
               active={engineId}
               onChange={setEngineId}
               enabled={ENABLED}
+              locked={!memoryEnabled}
             />
           </div>
           <button
@@ -99,6 +132,7 @@ function SimpleChatPage() {
             key={`${sessionId}:${engineId}`}
             sessionId={sessionId}
             engineId={engineId}
+            memoryEnabled={memoryEnabled}
             chatEndpoint="/api/simple-chat"
             onTurnComplete={(t) => setTurnId(t)}
           />

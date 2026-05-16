@@ -22,9 +22,11 @@ export const chatRequestSchema = z
       .object({
         sessionId: z.string().optional(),
         engineId: z.string().optional(),
+        memoryEnabled: z.boolean().optional(),
       })
       .optional(),
     sessionId: z.string().optional(),
     engineId: z.string().optional(),
+    memoryEnabled: z.boolean().optional(),
   })
   .passthrough()

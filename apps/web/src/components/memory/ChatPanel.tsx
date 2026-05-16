@@ -31,6 +31,7 @@ export function ChatPanel({
   autoplay,
   seedPrompts,
   chatEndpoint = '/api/chat',
+  memoryEnabled = true,
 }: {
   sessionId: string
   engineId: EngineId
@@ -42,6 +43,8 @@ export function ChatPanel({
   }
   seedPrompts?: Array<{ label: string; text: string }>
   chatEndpoint?: string
+  /** When false, the request is sent with `memoryEnabled: false` and the recall UI/polling is suppressed. Defaults to true. */
+  memoryEnabled?: boolean
 }) {
   const [input, setInput] = useState('')
   const [lastRecall, setLastRecall] = useState<LastRecall | null>(null)
@@ -53,11 +56,12 @@ export function ChatPanel({
 
   const { messages, sendMessage, isLoading } = useChat({
     connection: fetchServerSentEvents(chatEndpoint),
-    body: { sessionId, engineId },
+    body: { sessionId, engineId, memoryEnabled },
     onFinish: async (assistantMessage) => {
       const assistantText = extractText(assistantMessage.parts)
       pendingUserRef.current = ''
       if (!assistantText) return
+      if (!memoryEnabled) return
       const deadline = Date.now() + 20_000
       while (Date.now() < deadline) {
         try {
@@ -120,6 +124,7 @@ export function ChatPanel({
 
   useEffect(() => {
     if (!isLoading) return
+    if (!memoryEnabled) return
     let cancelled = false
     const prevTakenAt = lastRecall?.takenAt ?? ''
     const poll = async () => {
@@ -148,7 +153,7 @@ export function ChatPanel({
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, sessionId])
+  }, [isLoading, sessionId, memoryEnabled])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -196,7 +201,13 @@ export function ChatPanel({
         })}
       </div>
       <div className="border-t border-orange-500/20">
-        {lastRecall && (
+        {!memoryEnabled && (
+          <div className="px-4 py-1.5 text-[10px] text-amber-300/80 border-b border-amber-500/20 bg-amber-500/5">
+            memory disabled — assistant has no recall and nothing is being
+            retained for this turn
+          </div>
+        )}
+        {memoryEnabled && lastRecall && (
           <div className="px-4 pt-2 text-[10px] text-gray-400 border-b border-orange-500/10">
             <button
               type="button"
