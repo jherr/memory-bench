@@ -160,11 +160,11 @@ The `@tanstack/ai-memory` package models this with a `MemoryDriver`:
 
 ```ts
 interface MemoryDriver {
-  id: EngineId
-  recall(scope: Scope, query: string): Promise<RecallResult>
-  retainTurn(scope: Scope, input: RetainInput): Promise<Array<RetainReceipt>>
-  inspect(scope: Scope): Promise<MemorySnapshot>
-  listFacts(scope: Scope): Promise<FactList>
+  id: EngineId;
+  recall(scope: Scope, query: string): Promise<RecallResult>;
+  retainTurn(scope: Scope, input: RetainInput): Promise<Array<RetainReceipt>>;
+  inspect(scope: Scope): Promise<MemorySnapshot>;
+  listFacts(scope: Scope): Promise<FactList>;
 }
 ```
 
@@ -194,12 +194,12 @@ they remember, recall, and expose back to the agent?
 
 ## Memory Engines
 
-| Engine | Integration | Recall | Retain | Tools |
-| --- | --- | --- | --- | --- |
-| Hindsight | Docker service via `@vectorize-io/hindsight-client` | Structured recall rendered into a system prompt | User and assistant retained separately | `hindsight_retain`, `hindsight_recall`, `hindsight_reflect` |
-| mem0 | Docker service via REST API | Search results rendered into a memory block | Conversation posted to `/memories` | none |
-| Honcho | Docker service via `@honcho-ai/sdk` | `userPeer.chat()` synthesis | Messages added to a Honcho session | none |
-| Local | In-process composed driver | App-owned stages search and render facts | Extract, consolidate, and store facts locally | depends on configured `ToolFactory` |
+| Engine                                       | Integration                                         | Recall                                          | Retain                                        | Tools                                                       |
+| -------------------------------------------- | --------------------------------------------------- | ----------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------- |
+| [Hindsight](https://hindsight.vectorize.io/) | Docker service via `@vectorize-io/hindsight-client` | Structured recall rendered into a system prompt | User and assistant retained separately        | `hindsight_retain`, `hindsight_recall`, `hindsight_reflect` |
+| [mem0](https://mem0.ai)                      | Docker service via REST API                         | Search results rendered into a memory block     | Conversation posted to `/memories`            | none                                                        |
+| [Honcho](https://honcho.dev)                 | Docker service via `@honcho-ai/sdk`                 | `userPeer.chat()` synthesis                     | Messages added to a Honcho session            | none                                                        |
+| Local                                        | In-process composed driver                          | App-owned stages search and render facts        | Extract, consolidate, and store facts locally | depends on configured `ToolFactory`                         |
 
 The app can compare engines while keeping the chat route mostly engine
 agnostic. Each provider returns the same `RecallResult` shape:

@@ -48,14 +48,14 @@ For the Hindsight and Honcho providers, the package imports their SDKs from
 the provider subpaths:
 
 ```ts
-import { hindsightEngine } from '@tanstack/ai-memory/hindsight'
-import { honchoEngine } from '@tanstack/ai-memory/honcho'
+import { hindsightEngine } from "@tanstack/ai-memory/hindsight";
+import { honchoEngine } from "@tanstack/ai-memory/honcho";
 ```
 
 mem0 uses direct HTTP calls and does not require a mem0 SDK:
 
 ```ts
-import { mem0Engine } from '@tanstack/ai-memory/mem0'
+import { mem0Engine } from "@tanstack/ai-memory/mem0";
 ```
 
 The middleware helpers are exported separately:
@@ -64,7 +64,7 @@ The middleware helpers are exported separately:
 import {
   createMemoryMiddleware,
   composeMemoryMiddleware,
-} from '@tanstack/ai-memory/middleware'
+} from "@tanstack/ai-memory/middleware";
 ```
 
 ## How Memory Works
@@ -73,11 +73,11 @@ Every provider implements the same `MemoryDriver` contract:
 
 ```ts
 interface MemoryDriver {
-  id: EngineId
-  recall(scope: Scope, query: string): Promise<RecallResult>
-  retainTurn(scope: Scope, input: RetainInput): Promise<Array<RetainReceipt>>
-  inspect(scope: Scope): Promise<MemorySnapshot>
-  listFacts(scope: Scope): Promise<FactList>
+  id: EngineId;
+  recall(scope: Scope, query: string): Promise<RecallResult>;
+  retainTurn(scope: Scope, input: RetainInput): Promise<Array<RetainReceipt>>;
+  inspect(scope: Scope): Promise<MemorySnapshot>;
+  listFacts(scope: Scope): Promise<FactList>;
 }
 ```
 
@@ -97,10 +97,10 @@ The runtime flow is:
 
 ```ts
 type Scope = {
-  sessionId: string
-  userId?: string
-  toolEvents?: MemoryToolEventSink
-}
+  sessionId: string;
+  userId?: string;
+  toolEvents?: MemoryToolEventSink;
+};
 ```
 
 Drivers interpret that scope differently. Hindsight stores by
@@ -121,48 +121,53 @@ docker compose --profile hindsight up -d
 Then wire Hindsight into TanStack AI middleware:
 
 ```ts
-import { chat, toServerSentEventsResponse } from '@tanstack/ai'
-import { anthropicText } from '@tanstack/ai-anthropic'
-import { createMemoryMiddleware } from '@tanstack/ai-memory/middleware'
-import { hindsightEngine } from '@tanstack/ai-memory/hindsight'
+// app/routes/api.chat.ts
+import { createFileRoute } from "@tanstack/react-router";
+import { chat, toServerSentEventsResponse } from "@tanstack/ai";
+import { anthropicText } from "@tanstack/ai-anthropic";
+import { createMemoryMiddleware } from "@tanstack/ai-memory/middleware";
+import { hindsightEngine } from "@tanstack/ai-memory/hindsight";
 
-export async function POST(request: Request) {
-  const { messages, sessionId, userId } = await request.json()
-  const abortController = new AbortController()
+export const Route = createFileRoute("/api/chat")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const { messages, sessionId, userId } = await request.json();
+        const abortController = new AbortController();
 
-  const memory = createMemoryMiddleware({
-    engine: hindsightEngine,
-    scope: {
-      sessionId,
-      userId,
+        const memory = createMemoryMiddleware({
+          engine: hindsightEngine,
+          scope: { sessionId, userId },
+          role: "recall+retain",
+          // Optional: observe recalled memory for logging, telemetry, or UI state.
+          onRecallComplete({ query, result }) {
+            console.log("memory recall", {
+              query,
+              fragments: result.fragments ?? [],
+              latencyMs: result.latencyMs,
+            });
+          },
+          // Optional: observe retain receipts after the finished turn is written.
+          onRetainComplete({ receipts }) {
+            console.log("memory retain", receipts);
+          },
+        });
+
+        const stream = chat({
+          adapter: anthropicText("claude-sonnet-4-5"),
+          systemPrompts: [
+            "You are a helpful assistant. Use recalled memory when relevant.",
+          ],
+          messages,
+          abortController,
+          middleware: [memory],
+        });
+
+        return toServerSentEventsResponse(stream, { abortController });
+      },
     },
-    role: 'recall+retain',
-    // Optional: observe recalled memory for logging, telemetry, or UI state.
-    onRecallComplete({ query, result }) {
-      console.log('memory recall', {
-        query,
-        fragments: result.fragments ?? [],
-        latencyMs: result.latencyMs,
-      })
-    },
-    // Optional: observe retain receipts after the finished turn is written.
-    onRetainComplete({ receipts }) {
-      console.log('memory retain', receipts)
-    },
-  })
-
-  const stream = chat({
-    adapter: anthropicText('claude-sonnet-4-5'),
-    systemPrompts: [
-      'You are a helpful assistant. Use recalled memory when relevant.',
-    ],
-    messages,
-    abortController,
-    middleware: [memory],
-  })
-
-  return toServerSentEventsResponse(stream, { abortController })
-}
+  },
+});
 ```
 
 `role` controls which parts of the middleware lifecycle this engine handles:
@@ -200,28 +205,28 @@ to multiple memory middlewares. A common pattern is one active
 import {
   composeMemoryMiddleware,
   createMemoryMiddleware,
-} from '@tanstack/ai-memory/middleware'
-import { hindsightEngine } from '@tanstack/ai-memory/hindsight'
-import { mem0Engine } from '@tanstack/ai-memory/mem0'
-import { honchoEngine } from '@tanstack/ai-memory/honcho'
+} from "@tanstack/ai-memory/middleware";
+import { hindsightEngine } from "@tanstack/ai-memory/hindsight";
+import { mem0Engine } from "@tanstack/ai-memory/mem0";
+import { honchoEngine } from "@tanstack/ai-memory/honcho";
 
 const middleware = composeMemoryMiddleware([
   createMemoryMiddleware({
     engine: hindsightEngine,
     scope,
-    role: 'recall+retain',
+    role: "recall+retain",
   }),
   createMemoryMiddleware({
     engine: mem0Engine,
     scope,
-    role: 'retain-only',
+    role: "retain-only",
   }),
   createMemoryMiddleware({
     engine: honchoEngine,
     scope,
-    role: 'retain-only',
+    role: "retain-only",
   }),
-])
+]);
 ```
 
 `retain-only` middleware skips recall and only writes the finished turn.
@@ -236,7 +241,7 @@ before importing the provider module.
 Import:
 
 ```ts
-import { hindsightEngine } from '@tanstack/ai-memory/hindsight'
+import { hindsightEngine } from "@tanstack/ai-memory/hindsight";
 ```
 
 Environment:
@@ -274,7 +279,7 @@ Behavior:
 Import:
 
 ```ts
-import { mem0Engine } from '@tanstack/ai-memory/mem0'
+import { mem0Engine } from "@tanstack/ai-memory/mem0";
 ```
 
 Environment:
@@ -310,7 +315,7 @@ Behavior:
 Import:
 
 ```ts
-import { honchoEngine } from '@tanstack/ai-memory/honcho'
+import { honchoEngine } from "@tanstack/ai-memory/honcho";
 ```
 
 Environment:
